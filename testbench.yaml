@@ -1,0 +1,7 @@
+# Testbench dev-app configuration (used by `composer test` and, via Larastan's
+# bootstrap, by `composer analyse`). Redline owns its auth surface end-to-end —
+# the JWT middleware resolves the principal as Zipavlin\Redline\Models\Base\User
+# (the storage provider's model) — so point the dev app's users provider at that
+# model. This keeps Larastan's Request::user() typing in sync with runtime.
+env:
+    AUTH_MODEL: Zipavlin\Redline\Models\Base\User
