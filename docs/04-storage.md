@@ -1,0 +1,183 @@
+# Storage
+
+Redline persists reports, users, comments and media through a pluggable storage
+provider. The provider decides where data lives (a SQLite database or JSON flat
+files) and is selected with a single environment variable.
+
+## Choosing a provider
+
+The active provider is `config('redline.storage.provider')`, set from
+`REDLINE_STORAGE_PROVIDER`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `REDLINE_STORAGE_PROVIDER` | `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` | Fully-qualified class name of the storage backend to use. |
+
+> **No automatic fallback.** The default is always `DatabaseStorageProvider`. If
+> the configured class is invalid the package fails at boot rather than silently
+> falling back - set `REDLINE_STORAGE_PROVIDER` explicitly to switch.
+
+`php artisan redline:install` handles the wiring for you:
+
+1. It prompts for a backend, offering only provider classes that actually exist
+   (currently Database and File).
+2. It writes `REDLINE_STORAGE_PROVIDER=<FQCN>` into the host app's `.env`.
+3. For `DatabaseStorageProvider` it configures the `redline` connection and runs
+   the package migrations.
+4. For `FileStorageProvider` it checks for `ryangjchandler/orbit` and offers to
+   install it if missing (see below).
+
+## Database storage (default)
+
+`Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` - Eloquent models on a
+dedicated SQLite connection named `redline`. All five model contracts
+(`User`, `Report`, `Screenshot`, `Video`, `Comment`) bind to Eloquent
+implementations in `src/Models/Database/`.
+
+### Where the database lives
+
+The connection points at `databasePath() . '/redline.db'`, where `databasePath()`
+resolves to `storage_path('app/{path.base}/{path.database}')`. With the default
+configuration that is:
+
+```
+storage/app/redline/database/redline.db
+```
+
+> The location is fully configurable via `REDLINE_STORAGE_PATH_BASE` and
+> `REDLINE_STORAGE_PATH_DATABASE`. Note that older documentation (README,
+> AGENTS.md) says `storage/app/redline/redline.db` - the code actually appends
+> the `database` subdirectory, so the file is one level deeper.
+
+The connection is created at boot and is skipped if `database.connections.redline`
+is already configured (the test suite injects `:memory:` this way).
+
+### Migrations
+
+- Schema lives in numbered migrations `database/redline/0001_…0005_`
+  (`0001_create_redline_users_table` … `0005_create_redline_comments_table`) -
+  numbered, **not** timestamped.
+- For a file database the schema is **not** migrated at runtime. If the database
+  file is missing, boot throws:
+
+  > `RuntimeException: Redline database not found at [storage/app/redline/database/redline.db]. Run \`php artisan redline:install\` to set up the database.`
+
+  and if the file exists but the `redline_reports` table is absent:
+
+  > `RuntimeException: Redline database tables not found. Run \`php artisan redline:install\` to set up the database.`
+
+  `redline:install` creates the schema by running `php artisan migrate
+  --path=vendor/zipavlin/redline/database/redline --database=redline`.
+- In-memory databases (`:memory:`) auto-migrate at boot - this is how the
+  package's own test suite gets its schema.
+
+### Requirements
+
+- PHP `pdo_sqlite` extension (the connection driver is `sqlite`).
+
+## File storage (Orbit)
+
+`Zipavlin\Redline\Providers\Storage\FileStorageProvider` - JSON flatfile storage via
+[`ryangjchandler/orbit`](https://github.com/ryangjchandler/orbit). Model data
+(reports, users, comments, …) is written as JSON under
+`storage/app/redline/database/<model>/`; media binaries still go to the
+`screenshots`/`videos` directories.
+
+- Requires **Laravel 12+**.
+- Install the optional dependency with:
+
+  ```bash
+  composer require ryangjchandler/orbit
+  ```
+
+- Orbit availability is detected at runtime via
+  `trait_exists('Orbit\Concerns\Orbital')` - not by composer metadata, because
+  orbit may be a transitive dependency or declared-but-uninstalled.
+- **When orbit is absent**: selecting this provider throws at boot:
+
+  > `RuntimeException: FileStorageProvider requires ryangjchandler/orbit. Run: composer require ryangjchandler/orbit`
+
+  The Orbit model classes also self-guard (they bail out at load time), and
+  `redline:install` warns and offers to install the package when you pick File
+  storage without it.
+
+## Storage layout
+
+All local files live under `storage/app/{path.base}`. The four path keys under
+`config('redline.storage.path')`:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `REDLINE_STORAGE_PATH_BASE` | `redline` | Root directory under `storage/app/` |
+| `REDLINE_STORAGE_PATH_SCREENSHOTS` | `screenshots` | Uploaded PNG screenshots |
+| `REDLINE_STORAGE_PATH_VIDEOS` | `videos` | Uploaded video files |
+| `REDLINE_STORAGE_PATH_DATABASE` | `database` | SQLite file (Database provider) or JSON model dirs (File provider) |
+
+Default resulting tree:
+
+```
+storage/app/redline/
+├── screenshots/          # {ordered-uuid}.png
+├── videos/               # {uuid}.{mp4|webm}
+└── database/
+    ├── redline.db        # DatabaseStorageProvider
+    └── reports/ users/ … # FileStorageProvider (Orbit JSON)
+```
+
+The directories are created automatically by the provider's `boot()`.
+
+## Media files
+
+Uploaded media is private by design: original filenames are discarded, files are
+renamed to `{uuid}.{ext}` at rest, and they are served **only** through the
+package's binary controller routes - never through public/static URLs.
+
+### Naming & constraints
+
+| Kind | Endpoint | Stored as | Validation |
+|---|---|---|---|
+| Screenshot | `POST /redline/api/report/{report}/screenshot` | `{ordered-uuid}.png` | `mimes:png`, ≤ 5120 KB (5 MB) |
+| Video | `POST /redline/api/report/{report}/video` | `{uuid}.{ext}` | ≤ 51200 KB (50 MB) |
+
+- The screenshot filename is a UUID plus `.png` (extension fixed by the storage
+  handler). The video extension is derived from the MIME type:
+  `video/mp4`, `video/quicktime` and `video/x-m4v` → `.mp4`, anything else →
+  `.webm`. The video validation itself does **not** whitelist MIME types.
+- **One attachment per kind per report**: a second screenshot or video upload
+  against the same report returns `409 Conflict`
+  ("Screenshot already exists for this report." / "Video already exists for this report.").
+- Both `store` endpoints are feature-gated - disable with
+  `REDLINE_DISABLED=screenshots,videos` (see [Configuration](03-configuration.md)).
+
+### Private serving
+
+Binaries stream via `response()->file()` through authenticated routes, both
+inside the auth + CSRF middleware group:
+
+- `GET /redline/api/report/{report}/screenshot/{screenshot}/binary`
+- `GET /redline/api/report/{report}/video/{video}/binary`
+
+`VIEW` permission is required. There are no public routes for these files.
+Deleting a report also deletes its screenshot/video files from disk.
+
+## Backup & git
+
+- **Git**: keep `storage/app/redline/` out of the host app's git history - add it
+  to `.gitignore`. It contains the SQLite database (which includes user accounts
+  with password hashes) and user-submitted media.
+- **Backup**: back up the whole `storage/app/redline/` directory - the database
+  file (or Orbit JSON dirs) plus `screenshots/` and `videos/`. Restoring the
+  directory restores both data and media, so database and files stay in sync.
+- With a future cloud provider there is nothing local to back up; media and data
+  would live on the remote API.
+
+## Custom Storage Provider
+- Extend `Zipavlin\Redline\Providers\Storage\StorageProvider` and register it
+  in `config.redline.storage.provider` or `REDLINE_STORAGE_PROVIDER`.
+
+## Related
+
+- [Installation](02-installation.md) - `redline:install` setup flow
+- [Configuration](03-configuration.md) - all environment variables
+- [Resources](07-resources.md) - report/screenshot/video API endpoints
+- [Commands](08-commands.md) - `redline:install`, `redline:user`, `redline:remove`
