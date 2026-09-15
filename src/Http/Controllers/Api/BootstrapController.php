@@ -27,6 +27,7 @@ class BootstrapController extends Controller
                 'guest_reporting' => (bool) config('redline.auth.guest', false),
                 'auth' => [
                     'can_login' => $this->auth->canLogin(),
+                    'login_mode' => $this->auth->loginMode(),
                     'can_register' => $this->auth->canRegister(),
                     'fields' => $this->auth->fields(),
                     'can_select_role' => $this->auth->canSelectRole(),

@@ -2,7 +2,7 @@
 
 Redline's **guard** decides *when* the package is active at all. The boot process and every request consult a single `Zipavlin\Redline\Providers\Guard\GuardProvider` instance, selected through configuration, whose `isActive()` answer switches the package's request-facing surface on or off.
 
-This chapter covers the three built-in providers, how to exclude individual paths from widget/API injection, how dashboard and widget gating differ, and how to write your own guard.
+This chapter covers the four built-in providers, how to exclude individual paths from widget/API injection, how dashboard and widget gating differ, and how to write your own guard.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -59,6 +59,21 @@ FQCN: `Zipavlin\Redline\Providers\Guard\IpGuardProvider`.
 
 ```dotenv
 REDLINE_GUARD_ALLOWED_IPS=203.0.113.10,203.0.113.20
+```
+
+## LaravelGuardProvider
+
+FQCN: `Zipavlin\Redline\Providers\Guard\LaravelGuardProvider`.
+
+- **Activation:** `Auth::guard()->check()` - active only when the host application's Laravel user is logged in. Pair it with [`LaravelAuthProvider`](05-authentication.md#laravelauthprovider).
+- **Env knobs:** none beyond `REDLINE_GUARD_PROVIDER`.
+- **Deferred boot (`shouldLoadMiddleware()`):** boot runs before any middleware, so the session does not exist yet and `isActive()` cannot be evaluated. This guard overrides `shouldLoadMiddleware()` to return `true`, so the package always wires up its routes and middleware; the real decision is made **per request** in `isActive()`.
+- **Per-request enforcement:** `ShowRedlineWidget` re-checks `shouldShowWidget()` (so no widget injection for logged-out visitors) and the dashboard catch-all in `routes/web.php` aborts with **403** unless `shouldShowDashboard()` holds. The dashboard route therefore carries `EncryptCookies` + `StartSession` middleware so the session is available for the re-check.
+- **API routes stay JWT-only:** the guard does not gate `/api/*` per request - `RedlineApiAuth` is unchanged, so a valid redline JWT keeps working even if the host session has ended.
+- **Intended use:** private staging/preview environments where every tester already has a host-app login and no separate Redline identity is wanted.
+
+```dotenv
+REDLINE_GUARD_PROVIDER=Zipavlin\Redline\Providers\Guard\LaravelGuardProvider
 ```
 
 ## Excluding paths (REDLINE_GUARD_EXCLUDE)

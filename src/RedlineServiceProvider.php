@@ -115,13 +115,13 @@ class RedlineServiceProvider extends ServiceProvider
             /** @var StorageProvider $storage */
             $storage = $this->app->make(StorageProvider::class);
 
-            if (! $guard->isActive(request())) {
+            if (! $guard->shouldLoadMiddleware(request())) {
                 return;
             }
 
-            // API routes are available for local providers
-            // only when either dashboard or widget is active
-            if ($storage->isLocal() && ($guard->shouldShowDashboard(request()) || $guard->shouldShowWidget(request()))) {
+            // API routes are available for local providers only when the guard
+            // says the package should wire up its middleware at boot.
+            if ($storage->isLocal() && $guard->shouldLoadMiddleware(request())) {
                 $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
             }
 
@@ -129,7 +129,7 @@ class RedlineServiceProvider extends ServiceProvider
             $this->loadViewsFrom(__DIR__.'/../resources/views', 'redline');
 
             // Widget injection
-            if ($guard->shouldShowWidget(request())) {
+            if ($guard->shouldLoadMiddleware(request())) {
                 $this->callAfterResolving(Kernel::class, function (Kernel $kernel): void {
                     /** @var \Illuminate\Foundation\Http\Kernel $kernel */
                     $kernel->appendMiddlewareToGroup('web', ShowRedlineWidget::class);
@@ -137,7 +137,7 @@ class RedlineServiceProvider extends ServiceProvider
             }
 
             // Dashboard is available for local providers only.
-            if ($guard->shouldShowDashboard(request()) && $storage->isLocal()) {
+            if ($storage->isLocal() && $guard->shouldLoadMiddleware(request())) {
                 $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
             }
 

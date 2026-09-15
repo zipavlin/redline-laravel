@@ -2,7 +2,7 @@
 
 Redline authenticates users with a JSON Web Token (JWT, HS256) that is delivered **exclusively as an HttpOnly cookie** - it is never returned in JSON bodies. All auth behavior - self-registration, PINs, domain gating, approvals, and anonymous guest submissions - is driven by a pluggable auth provider selected with `REDLINE_AUTH_PROVIDER` (default `Zipavlin\Redline\Providers\Auth\OpenAuthProvider`).
 
-This chapter covers the token/CSRF contract, the six providers, roles & capabilities, pending accounts, guest mode, email verification & password reset, and the security defaults.
+This chapter covers the token/CSRF contract, the seven providers, roles & capabilities, pending accounts, guest mode, email verification & password reset, and the security defaults.
 
 ## How authentication works
 
@@ -70,6 +70,7 @@ The provider is bound from `config('redline.auth.provider')` / `REDLINE_AUTH_PRO
 | `DomainAuthProvider` | Registration limited to allowed email domains | Free choice within the domain | `REDLINE_AUTH_DOMAINS` |
 | `ApprovalAuthProvider` | Self-register → pending → admin approves | Admin assigns on approval | - |
 | `ClosedAuthProvider` | No self-registration; admin creates users | Admin assigns | - |
+| `LaravelAuthProvider` | Host application session; first login provisions a reporter | Fixed `reporter` | - |
 
 ## OpenAuthProvider
 
@@ -112,6 +113,22 @@ The provider is bound from `config('redline.auth.provider')` / `REDLINE_AUTH_PRO
 
 - `canRegister()` returns `false`; `POST /{path}/api/auth/register` answers **403** `Registration not allowed.`
 - All users are created by an admin via the dashboard or `php artisan redline:user`; existing users log in normally.
+
+## LaravelAuthProvider
+
+`Zipavlin\Redline\Providers\Auth\LaravelAuthProvider` - the host application session **is** the redline identity. Pair it with [`LaravelGuardProvider`](06-guards.md#laravelguardprovider).
+
+- `canRegister()` is `false` and `register()` throws: `POST /{path}/api/auth/register` answers **403**. `canSelectRole()` is `false`.
+- `loginMode()` is `'session'`, surfaced through bootstrap as `capabilities.auth.login_mode`. The widget renders **no** login form in this mode; it calls `POST /{path}/api/auth/login` with an **empty body**.
+- `login()` reads the host Laravel user via `Auth::guard()->user()`:
+  - no host user → **401** `Not authenticated with the host application.`;
+  - host user without an email → **401** `Host user has no email address.` (fail closed - the email is the only join key to a redline identity);
+  - a redline user with the host user's email already exists → that user is returned **as-is** (no name sync, no role change);
+  - otherwise a redline user is provisioned: `role = reporter` (fixed - never resolved from config), `status = approved`, `password = null`, with the host user's `name` (falling back to the email) and `email` copied across.
+- The response is the usual `{ user: {...} }` with the HttpOnly `redline_token` cookie. A second login reuses the same redline user - no duplicate is created.
+- Credentials are never validated here, so a malformed/empty body is not a 422: the host session is the only credential.
+
+> **WARNING - trusted email ownership.** The provider trusts the host app's email ownership as proof of identity (the email is the only join key). Anyone who can obtain a host account with a given email inherits the matching redline identity, so do **not** pair `LaravelAuthProvider` with host registration that is open to untrusted users.
 
 ## Roles & capabilities
 
@@ -181,7 +198,7 @@ Some providers admit users in two steps. Pending responses are signaled by **HTT
 
 **Reset.** `POST /{path}/api/auth/reset-password` is protected by Laravel's `signed` middleware; it validates the new password (min 8 chars), saves it, and calls `bumpTokenVersion()` so all previously issued JWTs are rejected. Invalid/expired links → 422.
 
-**Login anti-enumeration.** The base login returns the same `Invalid credentials.` 401 for a nonexistent email and a wrong password, and runs a dummy hash check on the not-found path to keep timing comparable.
+**Login anti-enumeration.** The base login (`AuthProvider::login()`) validates `email` (required, valid address, max 255) and `password` (required, string) and returns a **422** with a readable message for malformed input before any lookup. Past that point it returns the same `Invalid credentials.` 401 for a nonexistent email and a wrong password, and runs a dummy hash check on the not-found path to keep timing comparable. (Session-based providers such as `LaravelAuthProvider` bypass this validation entirely - they have no credentials to check.)
 
 ## Security notes
 

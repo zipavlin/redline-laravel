@@ -112,16 +112,36 @@ abstract class AuthProvider
     }
 
     /**
+     * How the widget obtains a redline session from this provider.
+     * 'credentials' - the widget renders a login form and POSTs email/password.
+     * 'session'     - the host application session is the credential; the widget
+     *                 POSTs an empty body to /auth/login (see LaravelAuthProvider).
+     */
+    public function loginMode(): string
+    {
+        return 'credentials';
+    }
+
+    /**
      * Verify login credentials and return user data or an error descriptor.
      *
      * Returns one of:
      *   ['user' => [...]]                                → success
      *   ['status' => 'pending', 'message' => '...', 'code' => 202]  → pending
      *   ['error' => '...', 'code' => 401]               → wrong password
-     *   ['error' => '...', 'code' => 404]               → no account found
+     *   ['error' => '...', 'code' => 422]               → malformed credentials
      */
     public function login(array $data): array
     {
+        $validator = Validator::make($data, [
+            'email' => ['required', 'email', 'max:255'],
+            'password' => ['required', 'string'],
+        ]);
+
+        if ($validator->fails()) {
+            return ['error' => $validator->errors()->first(), 'code' => 422];
+        }
+
         $user = app(User::class)->where('email', $data['email'] ?? '')->first();
 
         // Uniform response for "no such account" and "wrong password" so login

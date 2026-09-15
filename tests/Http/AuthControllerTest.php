@@ -115,6 +115,31 @@ it('returns a uniform 401 (not 404) when no account exists, to avoid email enume
     ])->assertStatus(401);
 });
 
+it('returns the redline 422 envelope (errors array + pending false) for an empty login body', function () {
+    $body = $this->postJson('/redline/api/auth/login', [])
+        ->assertStatus(422)
+        ->json();
+
+    // Redline's own envelope - not Laravel's standard `{ message, errors }`.
+    expect($body['errors'])->toBeArray()
+        ->and($body['errors'])->not->toBeEmpty()
+        ->and($body['pending'])->toBeFalse()
+        ->and($body)->not->toHaveKey('message');
+});
+
+it('returns the redline 422 envelope for malformed credentials', function () {
+    $body = $this->postJson('/redline/api/auth/login', [
+        'email' => 'not-an-email', 'password' => 'x',
+    ])
+        ->assertStatus(422)
+        ->json();
+
+    expect($body['errors'])->toBeArray()
+        ->and($body['errors'])->not->toBeEmpty()
+        ->and($body['pending'])->toBeFalse()
+        ->and($body)->not->toHaveKey('message');
+});
+
 // ---------------------------------------------------------------------------
 // PIN provider
 // ---------------------------------------------------------------------------

@@ -49,7 +49,12 @@ return [
     'guard' => [
         // Provider
         // Controls when Redline is active.
-        // Default: APP_ENV=staging AND APP_DEBUG=true
+        // Default: APP_ENV=staging (EnvironmentGuardProvider)
+        // Options:
+        //   EnvironmentGuardProvider - active when APP_ENV=staging (default)
+        //   DebugGuardProvider       - active when APP_DEBUG=true
+        //   IpGuardProvider          - active when the client IP is in REDLINE_GUARD_ALLOWED_IPS
+        //   LaravelGuardProvider     - active when the host application user is logged in
         'provider' => env('REDLINE_GUARD_PROVIDER', EnvironmentGuardProvider::class),
         'exclude' => env('REDLINE_GUARD_EXCLUDE', null),
     ],
@@ -66,6 +71,7 @@ return [
         //   DomainAuthProvider    - registration restricted to allowed domain(s) + email verification
         //   ApprovalAuthProvider  - self-register → pending → admin approves
         //   ClosedAuthProvider    - no self-registration; admin creates users only
+        //   LaravelAuthProvider   - host application session; redline user provisioned on first login
         //   CloudAuthProvider     - cloud manages all user auth
         'provider' => env('REDLINE_AUTH_PROVIDER', OpenAuthProvider::class),
 

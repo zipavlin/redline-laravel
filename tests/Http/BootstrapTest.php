@@ -59,6 +59,7 @@ it('exposes OpenAuthProvider capabilities', function () {
     $this->getJson('/redline/api/bootstrap')
         ->assertStatus(200)
         ->assertJsonPath('capabilities.auth.can_login', true)
+        ->assertJsonPath('capabilities.auth.login_mode', 'credentials')
         ->assertJsonPath('capabilities.auth.can_register', true)
         ->assertJsonPath('capabilities.auth.fields', [])
         ->assertJsonPath('capabilities.auth.can_select_role', true)

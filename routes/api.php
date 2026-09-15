@@ -1,6 +1,8 @@
 <?php
 
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Zipavlin\Redline\Http\Controllers\Api\AuthController;
 use Zipavlin\Redline\Http\Controllers\Api\BootstrapController;
@@ -23,9 +25,15 @@ Route::prefix(config('redline.path', 'redline').'/api')->middleware(SubstituteBi
     });
 
     // -----------------------------------------------------------------------
-    // Auth - public endpoints (rate-limited to blunt brute-force/enumeration)
+    // Auth - public endpoints (rate-limited to blunt brute-force/enumeration).
+    //
+    // The session stack is always on: a session-based provider resolves the host
+    // Laravel user inside these routes, and route middleware lists are fixed at
+    // registration time. The redline cookies stay EncryptCookies-exempt from the
+    // provider boot, so they are not re-encrypted. No VerifyCsrfToken: redline's
+    // own double-submit CSRF is the only CSRF scheme on these endpoints.
     // -----------------------------------------------------------------------
-    Route::middleware('throttle:redline-auth')->group(function () {
+    Route::middleware([EncryptCookies::class, StartSession::class, 'throttle:redline-auth'])->group(function () {
         Route::post('auth/register', [AuthController::class, 'register'])->name('redline.auth.register');
         Route::post('auth/login', [AuthController::class, 'login'])->name('redline.auth.login');
 

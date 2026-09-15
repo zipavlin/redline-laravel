@@ -1,13 +1,17 @@
 <?php
 
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Zipavlin\Redline\Providers\Guard\GuardProvider;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
 
 Route::prefix(config('redline.path', 'redline'))
     ->name('redline.')
-    ->middleware(SubstituteBindings::class)
+    ->middleware([EncryptCookies::class, StartSession::class, SubstituteBindings::class])
     ->group(function () {
         // Inject Vite URL and version into all views - we use both in the layout.
         View::share('vite', RedlineServiceProvider::getViteUrl('dashboard'));
@@ -16,7 +20,14 @@ Route::prefix(config('redline.path', 'redline'))
         // Dashboard SPA shell - serves the Vue app at the redline root and all
         // sub-paths EXCEPT the /api subtree (handled by routes/api.php). vue-router
         // routes client-side; the API enforces auth.
-        Route::get('{any?}', function () {
+        Route::get('{any?}', function (Request $request) {
+            // Re-check per request: a session-based guard is inactive at boot (no
+            // session yet), so the shell must refuse when the host user is logged out.
+            // For boot-time guards this is behavior-neutral.
+            if (! app(GuardProvider::class)->shouldShowDashboard($request)) {
+                abort(403);
+            }
+
             $storage = app(StorageProvider::class);
 
             // Capability flags (features/auth/mail) moved to GET /redline/api/bootstrap,

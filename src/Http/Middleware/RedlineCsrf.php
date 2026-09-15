@@ -5,6 +5,7 @@ namespace Zipavlin\Redline\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Zipavlin\Redline\Support\Origin;
 
 /**
  * Package-owned double-submit CSRF protection for cookie-authenticated requests.
@@ -36,7 +37,7 @@ class RedlineCsrf
         // Defense-in-depth: a browser never sends a cross-origin request whose
         // Origin matches us, so a foreign Origin is grounds for rejection even
         // with a valid CSRF token in hand.
-        if ($request->headers->has('Origin') && ! $this->originAllowed($request)) {
+        if ($request->headers->has('Origin') && ! Origin::allows($request)) {
             return response()->json(['message' => 'Forbidden origin.'], 403);
         }
 
@@ -48,22 +49,5 @@ class RedlineCsrf
         }
 
         return $next($request);
-    }
-
-    private function originAllowed(Request $request): bool
-    {
-        $origin = $request->headers->get('Origin');
-
-        if ($origin === $request->getSchemeAndHttpHost()) {
-            return true;
-        }
-
-        $configured = config('redline.auth.allowed_origins', null);
-
-        if (! is_string($configured) || trim($configured) === '') {
-            return false;
-        }
-
-        return in_array($origin, array_map('trim', explode(',', $configured)), true);
     }
 }

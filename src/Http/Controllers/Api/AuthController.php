@@ -14,6 +14,7 @@ use Zipavlin\Redline\Models\Base\User;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
+use Zipavlin\Redline\Support\Origin;
 
 class AuthController extends Controller
 {
@@ -60,11 +61,19 @@ class AuthController extends Controller
             return $this->error(['Login not available via this provider.'], 403);
         }
 
-        $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-        ]);
+        // Session login has no credential the client alone controls, so a foreign
+        // Origin would let another site silently mint a redline session off the
+        // victim's host cookie. An absent Origin is a non-browser client - allowed.
+        if (
+            $this->auth->loginMode() === 'session'
+            && $request->headers->has('Origin')
+            && ! Origin::allows($request)
+        ) {
+            return response()->json(['message' => 'Forbidden origin.'], 403);
+        }
 
+        // The body is intentionally ignored in session mode (the host session IS the
+        // credential), so do not "fix" this by validating email/password here.
         $result = $this->auth->login($request->only('email', 'password'));
 
         if (isset($result['error'])) {
@@ -75,7 +84,12 @@ class AuthController extends Controller
             return $this->error([$result['message'] ?? 'Account not yet approved.'], 202, pending: true);
         }
 
-        $remember = $request->boolean('remember', $request->boolean('remember_me', false));
+        // Session login is locked to the short-lived 1h token (refreshed by the
+        // client); `remember` is ignored because the host session, not the token,
+        // decides how long access lasts.
+        $remember = $this->auth->loginMode() === 'session'
+            ? false
+            : $request->boolean('remember', $request->boolean('remember_me', false));
 
         return $this->tokenResponse($result['user'], $remember);
     }

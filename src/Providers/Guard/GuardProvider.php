@@ -21,6 +21,20 @@ abstract class GuardProvider
      */
     abstract public function isActive(Request $request): bool;
 
+    /**
+     * Whether the package should wire up its routes and middleware at boot.
+     *
+     * Boot runs before any middleware, so a guard whose activation depends on
+     * request state that middleware establishes (e.g. a session-based Laravel auth
+     * guard) cannot answer isActive() yet. Such guards override this to return true
+     * and enforce per-request in isActive() (checked by ShowRedlineWidget and the
+     * dashboard shell gate). Guards that can decide at boot keep the default.
+     */
+    public function shouldLoadMiddleware(Request $request): bool
+    {
+        return $this->shouldShowWidget($request);
+    }
+
     final public function shouldShowWidget(Request $request): bool
     {
         return $this->isActive($request)

@@ -57,7 +57,7 @@ All settings are read from `config/redline.php`, which maps to these env variabl
 | `REDLINE_STORAGE_PATH_SCREENSHOTS` | `screenshots` | Screenshot subdir |
 | `REDLINE_STORAGE_PATH_VIDEOS` | `videos` | Video subdir |
 | `REDLINE_STORAGE_PATH_DATABASE` | `database` | SQLite file subdir |
-| `REDLINE_GUARD_PROVIDER` | `Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider` | When Redline is active |
+| `REDLINE_GUARD_PROVIDER` | `Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider` | When Redline is active (`LaravelGuardProvider` = host app user logged in) |
 | `REDLINE_GUARD_EXCLUDE` | *(none)* | Comma-separated paths to skip injection on (exact, subpath, `/*`, glob) |
 | `REDLINE_AUTH_PROVIDER` | `Zipavlin\Redline\Providers\Auth\OpenAuthProvider` | Registration/role model |
 | `REDLINE_AUTH_TOKEN` | `3600` | JWT TTL (seconds) |
@@ -97,6 +97,9 @@ guest-mode submissions). How roles are claimed depends on the auth provider:
 | `DomainAuthProvider` | Registration limited to `REDLINE_AUTH_DOMAINS` (+ email verification) | Provider-defined |
 | `ApprovalAuthProvider` | Self-register, then admin approves | Pending until approved |
 | `ClosedAuthProvider` | No self-registration - admin creates users | Admin assigns |
+| `LaravelAuthProvider` | Host application session - first login provisions a redline **reporter**; no form (empty-body `POST /auth/login`), `login_mode=session` | Fixed: reporter |
+
+> **WARNING:** `LaravelAuthProvider` trusts the host app's email ownership: anyone who can obtain a host account with a given email inherits the matching redline identity. Do **not** pair it with host registration open to untrusted users.
 
 Notes:
 

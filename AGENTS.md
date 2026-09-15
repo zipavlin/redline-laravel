@@ -19,7 +19,11 @@ The package is **not** "completely inert outside staging". Only parts of it are 
   (`ShowRedlineWidget` middleware, appended to the `web` group). Default
   `EnvironmentGuardProvider` is active when `APP_ENV=staging` (in the current code
   `APP_DEBUG` does **not** gate it - see `tests/Guard/EnvironmentGuardProviderTest.php`).
-  `DebugGuardProvider` gates on `APP_DEBUG=true` instead. `REDLINE_GUARD_EXCLUDE` skips
+  `DebugGuardProvider` gates on `APP_DEBUG=true` instead. `LaravelGuardProvider` is
+  active when the host application user is logged in - it overrides
+  `shouldLoadMiddleware()` to always wire up, because the session is not available at
+  boot; per-request enforcement happens in `isActive()` (widget) and the 403 gate in
+  `routes/web.php` (dashboard). `REDLINE_GUARD_EXCLUDE` skips
   injection on matching paths (config default `null` - no exclusion; patterns support
   exact, subpath, `/*` and glob forms).
 
@@ -27,7 +31,7 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 ### PHP (Pest)
 ```
-composer test                    # full Pest suite (baseline: 251 passed, 3 skipped)
+composer test                    # full Pest suite (baseline: 333 passed, 2 skipped; see Test status)
 composer test-coverage           # Pest + coverage
 composer format                  # pint (Laravel defaults; no pint.json)
 vendor/bin/pest --filter=Report  # single file / group
@@ -43,9 +47,13 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-`vendor/bin/pest` reports **251 passed, 3 skipped**. The 3 skipped tests are
-`tests/Models/FileDriverGrammarTest.php` - Orbit-gated, they **skip gracefully** when
-`ryangjchandler/orbit` is not installed. Never assume Orbit is available.
+With `ryangjchandler/orbit` installed, `vendor/bin/pest` reports **333 passed, 2 skipped
+(995 assertions)**. The 2 skips are the without-Orbit failure paths in
+`tests/Commands/CreateUserCommandTest.php` and `tests/Commands/InstallCommandTest.php`.
+Without Orbit, the File-storage suites skip gracefully instead
+(`tests/Models/FileDriverGrammarTest.php`, `tests/Http/DomainAuthFileStorageTest.php`,
+`tests/Http/UserControllerFileStorageTest.php`, `tests/Auth/LaravelAuthProviderFileStorageTest.php`).
+Skip counts are environment-dependent. Never assume Orbit is available.
 
 ## Architecture
 
@@ -76,14 +84,21 @@ reference.
 ### Guard & auth providers (pluggable)
 
 - **Guard** (`src/Providers/Guard/`): `EnvironmentGuardProvider` (default; `APP_ENV=staging`),
-  `DebugGuardProvider` (`APP_DEBUG=true`), or custom. `REDLINE_GUARD_EXCLUDE` skips
-  injection on matching routes (default `null`).
+  `DebugGuardProvider` (`APP_DEBUG=true`), `LaravelGuardProvider` (host application user
+  logged in; always wires up at boot, enforced per request), or custom.
+  `REDLINE_GUARD_EXCLUDE` skips injection on matching routes (default `null`).
 - **Auth** (`src/Providers/Auth/`): `OpenAuthProvider` (default; anyone can register, role
   freely selectable), `PinAuthProvider` (PIN per role: `REDLINE_AUTH_PIN_REPORTER` /
   `REDLINE_AUTH_PIN_DEVELOPER`), `DomainAuthProvider` (`REDLINE_AUTH_DOMAINS`),
   `ApprovalAuthProvider` (self-register → pending → admin approves),
-  `ClosedAuthProvider` (admin creates users only), `CloudAuthProvider` (cloud-managed
-  auth; used with the future cloud storage).
+  `ClosedAuthProvider` (admin creates users only), `LaravelAuthProvider` (host app session
+  exchange on `POST /auth/login` with an empty body; no redline forms; first login
+  provisions a fixed-role reporter; `login_mode=session` in bootstrap),
+  `CloudAuthProvider` (cloud-managed auth; used with the future cloud storage).
+
+  > **WARNING:** `LaravelAuthProvider` trusts the host app's email ownership - anyone
+  > who can obtain a host account with a given email inherits the matching redline
+  > identity. Do not pair it with host registration open to untrusted users.
 
 ### Auth transport
 
