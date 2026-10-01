@@ -31,7 +31,7 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 ### PHP (Pest)
 ```
-composer test                    # full Pest suite (baseline: 346 passed, 0 skipped; see Test status)
+composer test                    # full Pest suite (baseline: 340 passed, 0 skipped; see Test status)
 composer test-coverage           # Pest + coverage
 composer format                  # pint (Laravel defaults; no pint.json)
 vendor/bin/pest --filter=Report  # single file / group
@@ -47,7 +47,7 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-`vendor/bin/pest` reports **345 passed, 0 skipped (1034 assertions)**. The package has a
+`vendor/bin/pest` reports **340 passed, 0 skipped (1013 assertions)**. The package has a
 single storage backend, so there are no environment-dependent skips.
 
 ## Architecture
@@ -100,7 +100,7 @@ Both respond `{ "members": [ { id, name, initials } ] }` - the report's full cur
 list, sorted by `name` then `id` (the shared `Support\Members::fromUsers()` projection,
 also used by the read grammar so the two cannot drift).
 
-Read grammar on `Base\Report::querySchema()`: include target `members` (relation
+Read grammar on `Report::querySchema()`: include target `members` (relation
 `members`; bare / `:count` / `:exists` → `members_count`/`members_exists`) and filter
 target `member` (relation operators over `members.id`). `filter[member:not]` /
 `filter[member:not_in]` negate the **whole** membership predicate ("has no such
