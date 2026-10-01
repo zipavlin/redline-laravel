@@ -4,7 +4,7 @@ namespace Zipavlin\Redline\Rules;
 
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 
 /**
  * Email uniqueness check scoped to the bound User model.

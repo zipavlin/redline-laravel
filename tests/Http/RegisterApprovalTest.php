@@ -1,6 +1,6 @@
 <?php
 
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\ApprovalAuthProvider;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Auth\OpenAuthProvider;

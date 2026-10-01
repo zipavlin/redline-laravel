@@ -1,6 +1,6 @@
 <?php
 
-namespace Zipavlin\Redline\Models\Base;
+namespace Zipavlin\Redline\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -11,10 +11,14 @@ use Zipavlin\Redline\Http\Query\IncludeField;
 use Zipavlin\Redline\Http\Query\QuerySchema;
 use Zipavlin\Redline\Models\Concerns\HasQuerySchema;
 
-abstract class Comment extends Model
+class Comment extends Model
 {
     use HasQuerySchema;
     use HasUuids;
+
+    protected $connection = 'redline';
+
+    protected $table = 'redline_comments';
 
     protected $fillable = [
         'id',
@@ -23,9 +27,15 @@ abstract class Comment extends Model
         'body',
     ];
 
-    abstract public function report(): BelongsTo;
+    public function report(): BelongsTo
+    {
+        return $this->belongsTo(Report::class, 'report_id');
+    }
 
-    abstract public function author(): BelongsTo;
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'author_id');
+    }
 
     /**
      * Query grammar surface for comments. CommentController::index() is a

@@ -1,6 +1,6 @@
 <?php
 
-namespace Zipavlin\Redline\Models\Base;
+namespace Zipavlin\Redline\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -16,10 +16,14 @@ use Zipavlin\Redline\Http\Query\IncludeField;
 use Zipavlin\Redline\Http\Query\QuerySchema;
 use Zipavlin\Redline\Models\Concerns\HasQuerySchema;
 
-abstract class User extends Model
+class User extends Model
 {
     use HasQuerySchema;
     use HasUuids;
+
+    protected $connection = 'redline';
+
+    protected $table = 'redline_users';
 
     protected $fillable = [
         'id',
@@ -121,9 +125,15 @@ abstract class User extends Model
         };
     }
 
-    abstract public function reports(): HasMany;
+    public function reports(): HasMany
+    {
+        return $this->hasMany(Report::class, 'author_id');
+    }
 
-    abstract public function comments(): HasMany;
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class, 'author_id');
+    }
 
     /**
      * The query grammar whitelist for the admin-only /user collection endpoint.

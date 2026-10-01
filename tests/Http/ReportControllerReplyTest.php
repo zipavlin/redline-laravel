@@ -1,8 +1,8 @@
 <?php
 
-use Zipavlin\Redline\Models\Base\Comment;
-use Zipavlin\Redline\Models\Base\Report;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\Comment;
+use Zipavlin\Redline\Models\Report;
+use Zipavlin\Redline\Models\User;
 
 beforeEach(function () {
     ensureRedlineDirectories();

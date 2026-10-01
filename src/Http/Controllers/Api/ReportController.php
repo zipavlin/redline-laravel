@@ -14,8 +14,8 @@ use Zipavlin\Redline\Enums\Status;
 use Zipavlin\Redline\Http\Query\QuerySchema;
 use Zipavlin\Redline\Http\Query\ResourceQuery;
 use Zipavlin\Redline\Mail\NewReportMail;
-use Zipavlin\Redline\Models\Base\Report;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\Report;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
 

@@ -6,8 +6,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Zipavlin\Redline\Enums\Operation;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Base\Report;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\Report;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Support\Members;
 
 /**

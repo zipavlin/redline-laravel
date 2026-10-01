@@ -8,8 +8,8 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Enums\Operation;
-use Zipavlin\Redline\Models\Base\Report;
-use Zipavlin\Redline\Models\Base\Screenshot;
+use Zipavlin\Redline\Models\Report;
+use Zipavlin\Redline\Models\Screenshot;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
 class ScreenshotController extends Controller

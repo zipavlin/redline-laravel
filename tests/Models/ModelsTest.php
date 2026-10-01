@@ -3,11 +3,11 @@
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Database\Comment;
-use Zipavlin\Redline\Models\Database\Report;
-use Zipavlin\Redline\Models\Database\Screenshot;
-use Zipavlin\Redline\Models\Database\User;
-use Zipavlin\Redline\Models\Database\Video;
+use Zipavlin\Redline\Models\Comment;
+use Zipavlin\Redline\Models\Report;
+use Zipavlin\Redline\Models\Screenshot;
+use Zipavlin\Redline\Models\User;
+use Zipavlin\Redline\Models\Video;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
 beforeEach(function () {

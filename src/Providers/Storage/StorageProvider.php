@@ -5,48 +5,20 @@ namespace Zipavlin\Redline\Providers\Storage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
-use Zipavlin\Redline\Models\Base\Comment;
-use Zipavlin\Redline\Models\Base\Report;
-use Zipavlin\Redline\Models\Base\Screenshot;
-use Zipavlin\Redline\Models\Base\User;
-use Zipavlin\Redline\Models\Base\Video;
-use Zipavlin\Redline\Models\Database\Comment as DatabaseComment;
-use Zipavlin\Redline\Models\Database\Report as DatabaseReport;
-use Zipavlin\Redline\Models\Database\Screenshot as DatabaseScreenshot;
-use Zipavlin\Redline\Models\Database\User as DatabaseUser;
-use Zipavlin\Redline\Models\Database\Video as DatabaseVideo;
 
 /**
  * The package's single local storage backend: Eloquent models on a dedicated
  * SQLite connection, plus uploaded media under `storage/app/{path.base}`.
  *
  * Responsibilities:
- *  - register(): return the model binding map (abstract model → Database implementation)
  *  - apiUrl(): return the URL the widget calls for the API
  *  - dashboardUrl(): return the URL the dashboard is served from
  *  - boot(): ensure directories, configure the `redline` connection, ensure the
- *    schema exists, then bind the model implementations in the IoC container
+ *    schema exists
  *  - media helpers shared by the package controllers
  */
 class StorageProvider
 {
-    /**
-     * Return a map of abstract model class → concrete implementation.
-     * boot() iterates this and calls app()->bind() for each entry.
-     *
-     * @return array<class-string, class-string>
-     */
-    public function register(): array
-    {
-        return [
-            User::class => DatabaseUser::class,
-            Report::class => DatabaseReport::class,
-            Screenshot::class => DatabaseScreenshot::class,
-            Video::class => DatabaseVideo::class,
-            Comment::class => DatabaseComment::class,
-        ];
-    }
-
     /**
      * The URL the widget uses for all API calls.
      */
@@ -64,7 +36,7 @@ class StorageProvider
     }
 
     /**
-     * Prepare the local storage backend and bind its models.
+     * Prepare the local storage backend.
      * Called by RedlineServiceProvider during boot.
      */
     public function boot(): void
@@ -72,10 +44,6 @@ class StorageProvider
         $this->ensureDirectories();
         $this->configureConnection();
         $this->ensureSchema();
-
-        foreach ($this->register() as $abstract => $concrete) {
-            app()->bind($abstract, $concrete);
-        }
     }
 
     // -----------------------------------------------------------------------

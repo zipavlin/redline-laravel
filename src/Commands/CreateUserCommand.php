@@ -6,7 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use RuntimeException;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
 class CreateUserCommand extends Command

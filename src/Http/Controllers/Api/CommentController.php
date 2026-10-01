@@ -7,8 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Enums\Operation;
-use Zipavlin\Redline\Models\Base\Comment;
-use Zipavlin\Redline\Models\Base\Report;
+use Zipavlin\Redline\Models\Comment;
+use Zipavlin\Redline\Models\Report;
 
 class CommentController extends Controller
 {

@@ -66,8 +66,7 @@ config and no custom-provider seam.
 
 Generic `filter[]/include[]/sort[]/paginate[]/aggregate[]/group_by[]` REST grammar.
 Entry point: `ResourceQuery::from($model, $request)`. Each model defines `querySchema()`
-on the Base class (`src/Models/Base/`); see the docblock on `QuerySchema` for the full
-reference.
+in `src/Models/`; see the docblock on `QuerySchema` for the full reference.
 
 - `FilterField` - declarative column/relation filters; relation filters delegate to the
   related resource's own schema (security boundary: allowlisted via `relatedFilters`).
@@ -80,8 +79,8 @@ reference.
 ### Report members - `redline_members` pivot
 
 Many-to-many report ↔ user members live in a plain `belongsToMany` pivot
-(`redline_members`) with **no model of its own** - `Database\Report::members()` points
-at `Database\User`. Migration `0006_create_redline_members_table.php` declares a
+(`redline_members`) with **no model of its own** - `Report::members()` points
+at `User`. Migration `0006_create_redline_members_table.php` declares a
 composite primary key `(report_id, user_id)` (the pair's uniqueness) and real foreign
 keys with `CASCADE` (consistent with `0003`–`0005`): `report_id` → `redline_reports.id`
 and `user_id` → `redline_users.id`. Cleanup is therefore delegated to the database:

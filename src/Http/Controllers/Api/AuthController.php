@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Zipavlin\Redline\Mail\PasswordResetMail;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;

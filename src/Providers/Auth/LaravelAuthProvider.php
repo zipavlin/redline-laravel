@@ -5,7 +5,7 @@ namespace Zipavlin\Redline\Providers\Auth;
 use Illuminate\Support\Facades\Auth;
 use Zipavlin\Redline\Contracts\Listable;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 
 /**
  * Host-application session auth - the Laravel user IS the redline identity.

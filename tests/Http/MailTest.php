@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\URL;
 use Zipavlin\Redline\Mail\NewReportMail;
 use Zipavlin\Redline\Mail\PasswordResetMail;
 use Zipavlin\Redline\Mail\VerifyEmailMail;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Auth\DomainAuthProvider;
 

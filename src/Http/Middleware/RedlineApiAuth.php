@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Symfony\Component\HttpFoundation\Response;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 
 /**
  * Verifies the Redline JWT on every protected API route.

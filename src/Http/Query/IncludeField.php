@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
 use Zipavlin\Redline\Enums\QueryCapability;
 use Zipavlin\Redline\Enums\QueryOperator;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 
 /**
  * One include[] target in a resource's {@see QuerySchema} - a plain

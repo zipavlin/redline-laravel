@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Hash;
 use Zipavlin\Redline\Contracts\Listable;
 use Zipavlin\Redline\Enums\FieldType;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Transports\Field;
 
 /**

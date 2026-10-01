@@ -6,8 +6,8 @@ use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\TransportInterface;
 use Symfony\Component\Mime\RawMessage;
-use Zipavlin\Redline\Models\Base\Report;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\Report;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Tests\TestCase;
 
 uses(TestCase::class)->in(__DIR__);

@@ -2,7 +2,7 @@
 
 use Illuminate\Auth\GenericUser;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\LaravelAuthProvider;
 
 function laravelAuthProvider(): LaravelAuthProvider

@@ -1,15 +1,19 @@
 <?php
 
-namespace Zipavlin\Redline\Models\Base;
+namespace Zipavlin\Redline\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
-abstract class Screenshot extends Model
+class Video extends Model
 {
     use HasUuids;
+
+    protected $connection = 'redline';
+
+    protected $table = 'redline_videos';
 
     public $timestamps = false;
 
@@ -24,10 +28,13 @@ abstract class Screenshot extends Model
     public function getUrlAttribute(): string
     {
         $token = request()->bearerToken();
-        $base = app(StorageProvider::class)->apiUrl()."/report/{$this->report_id}/screenshot/{$this->id}/binary";
+        $base = app(StorageProvider::class)->apiUrl()."/report/{$this->report_id}/video/{$this->id}/binary";
 
         return $token ? "{$base}?token={$token}" : $base;
     }
 
-    abstract public function report(): BelongsTo;
+    public function report(): BelongsTo
+    {
+        return $this->belongsTo(Report::class, 'report_id');
+    }
 }

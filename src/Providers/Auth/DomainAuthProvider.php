@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\URL;
 use Zipavlin\Redline\Contracts\Listable;
 use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Mail\VerifyEmailMail;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\RedlineServiceProvider;
 use Zipavlin\Redline\Rules\AllowedDomainRule;
 

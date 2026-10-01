@@ -29,7 +29,7 @@ On protected routes, `Zipavlin\Redline\Http\Middleware\RedlineApiAuth` extracts 
 
 ### token_version invalidation
 
-Every JWT carries the user's `token_version` in the `ver` claim. `Zipavlin\Redline\Http\Middleware\RedlineApiAuth` rejects any token whose `ver` does not match the stored value (401). `Zipavlin\Redline\Models\Base\User::bumpTokenVersion()` advances the counter and is called on **logout** and on every **password change** (self-service reset and admin-triggered reset), instantly invalidating every outstanding JWT for that user.
+Every JWT carries the user's `token_version` in the `ver` claim. `Zipavlin\Redline\Http\Middleware\RedlineApiAuth` rejects any token whose `ver` does not match the stored value (401). `Zipavlin\Redline\Models\User::bumpTokenVersion()` advances the counter and is called on **logout** and on every **password change** (self-service reset and admin-triggered reset), instantly invalidating every outstanding JWT for that user.
 
 ### CSRF: double-submit contract
 
@@ -134,7 +134,7 @@ The provider is bound from `config('redline.auth.provider')` / `REDLINE_AUTH_PRO
 
 Roles are a string enum (`Zipavlin\Redline\Enums\Role`): `reporter`, `developer`, `admin`, plus the shared `guest` identity used for anonymous guest-mode submissions.
 
-Authorization is centralized in `Zipavlin\Redline\Models\Base\User::can(Operation, ?model)`. Pending users (`status = 'pending'`) can do **nothing**; guests can only create reports and only when guest mode is on.
+Authorization is centralized in `Zipavlin\Redline\Models\User::can(Operation, ?model)`. Pending users (`status = 'pending'`) can do **nothing**; guests can only create reports and only when guest mode is on.
 
 | Action | Reporter | Developer | Admin |
 |---|---|---|---|

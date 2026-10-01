@@ -2,9 +2,9 @@
 
 use Illuminate\Support\Facades\Hash;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Database\User as DatabaseUser;
+use Zipavlin\Redline\Models\User;
 
-it('creates a Database user with a hashed password and role', function () {
+it('creates a user with a hashed password and role', function () {
     $this->artisan('redline:user')
         ->expectsQuestion('Name', 'Zig')
         ->expectsQuestion('Email', 'zig@example.com')
@@ -13,7 +13,7 @@ it('creates a Database user with a hashed password and role', function () {
         ->expectsOutputToContain('User Zig (zig@example.com) created')
         ->assertExitCode(0);
 
-    $user = app(DatabaseUser::class)->where('email', 'zig@example.com')->first();
+    $user = app(User::class)->where('email', 'zig@example.com')->first();
 
     expect($user)->not->toBeNull()
         ->and(Hash::check('secret123', $user->password))->toBeTrue()

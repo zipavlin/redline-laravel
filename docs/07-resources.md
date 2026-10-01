@@ -207,7 +207,7 @@ All report routes are protected. Route names: only the auth routes and `bootstra
 | POST | `/report/{report}/video` | `VideoController@store` | UPDATE (own or developer+) (+ `videos` feature) |
 | GET | `/report/{report}/video/{video}/binary` | `VideoController@binary` | VIEW + parent check |
 
-Operation gates come from `Zipavlin\Redline\Models\Base\User::can()`:
+Operation gates come from `Zipavlin\Redline\Models\User::can()`:
 `UPDATE` = developer/admin **or** the report's author; `EDIT` = author only; `DELETE` =
 admin or author; `LIST`/`VIEW`/`CREATE` = any approved role (plus Guest for `CREATE` in
 guest mode). `{report}`, `{comment}`, `{screenshot}`, `{video}` are UUIDs; nested-child

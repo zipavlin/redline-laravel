@@ -5,7 +5,7 @@ namespace Zipavlin\Redline\Providers\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Rules\UniqueUserEmailRule;
 
 /**

@@ -8,8 +8,8 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Enums\Operation;
-use Zipavlin\Redline\Models\Base\Report;
-use Zipavlin\Redline\Models\Base\Video;
+use Zipavlin\Redline\Models\Report;
+use Zipavlin\Redline\Models\Video;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
 class VideoController extends Controller

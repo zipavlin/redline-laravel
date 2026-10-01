@@ -3,7 +3,7 @@
 namespace Zipavlin\Redline\Providers\Auth;
 
 use Zipavlin\Redline\Contracts\Listable;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 
 /**
  * Closed registration - no self-registration allowed.

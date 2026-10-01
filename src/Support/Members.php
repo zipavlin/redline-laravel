@@ -2,7 +2,7 @@
 
 namespace Zipavlin\Redline\Support;
 
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 
 /**
  * Shared `{id, name, initials}` projection for a report's members.

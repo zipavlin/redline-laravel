@@ -1,6 +1,6 @@
 <?php
 
-namespace Zipavlin\Redline\Models\Base;
+namespace Zipavlin\Redline\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -19,10 +19,14 @@ use Zipavlin\Redline\Http\Query\ResourceQuery;
 use Zipavlin\Redline\Models\Concerns\HasQuerySchema;
 use Zipavlin\Redline\Support\Members;
 
-abstract class Report extends Model
+class Report extends Model
 {
     use HasQuerySchema;
     use HasUuids;
+
+    protected $connection = 'redline';
+
+    protected $table = 'redline_reports';
 
     protected $fillable = [
         'id',
@@ -81,15 +85,30 @@ abstract class Report extends Model
         return in_array($to, $this->allowedStatusTargets($user), true);
     }
 
-    abstract public function author(): BelongsTo;
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'author_id');
+    }
 
-    abstract public function screenshot(): HasOne;
+    public function screenshot(): HasOne
+    {
+        return $this->hasOne(Screenshot::class, 'report_id');
+    }
 
-    abstract public function video(): HasOne;
+    public function video(): HasOne
+    {
+        return $this->hasOne(Video::class, 'report_id');
+    }
 
-    abstract public function comments(): HasMany;
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class, 'report_id')->orderBy('created_at');
+    }
 
-    abstract public function members(): BelongsToMany;
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'redline_members', 'report_id', 'user_id');
+    }
 
     /**
      * The query grammar whitelist for this resource - see the grammar docblock
@@ -289,8 +308,7 @@ abstract class Report extends Model
                     },
                 ),
                 // `author:count` (no value list) counts rows grouped by author_id -
-                // { "<author-uuid>": count }. Works for both Database and File
-                // drivers: author_id exists in both schemas.
+                // { "<author-uuid>": count }.
                 'author' => new AggregateField(
                     operators: [QueryOperator::COUNT, QueryOperator::UNIQUE],
                     column: 'author_id',

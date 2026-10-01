@@ -12,7 +12,7 @@ use Zipavlin\Redline\Enums\QueryCapability;
 use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Mail\RegistrationApprovedMail;
 use Zipavlin\Redline\Mail\UserInvitationMail;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
 use Zipavlin\Redline\Rules\UniqueUserEmailRule;

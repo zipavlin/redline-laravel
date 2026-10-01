@@ -5,7 +5,7 @@ namespace Zipavlin\Redline\Providers\Auth;
 use Illuminate\Support\Facades\Hash;
 use Zipavlin\Redline\Contracts\Listable;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 
 /**
  * Open registration - anyone can self-register and freely choose any role.

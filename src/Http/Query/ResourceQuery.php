@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Zipavlin\Redline\Enums\QueryCapability;
 use Zipavlin\Redline\Enums\QueryOperator;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 
 /**
  * A parsed-and-ready query against one resource's QuerySchema. Entry point is

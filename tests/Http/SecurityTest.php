@@ -3,7 +3,7 @@
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\URL;
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Auth\DomainAuthProvider;
 

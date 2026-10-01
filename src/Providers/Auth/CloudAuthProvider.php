@@ -2,7 +2,7 @@
 
 namespace Zipavlin\Redline\Providers\Auth;
 
-use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\User;
 
 /**
  * Cloud auth - all authentication and user management is handled by the

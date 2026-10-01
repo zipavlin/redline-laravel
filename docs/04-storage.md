@@ -8,9 +8,9 @@ storage provider - custom storage backends are **not supported**.
 ## Database storage
 
 `Zipavlin\Redline\Providers\Storage\StorageProvider` - Eloquent models on a
-dedicated SQLite connection named `redline`. All five model contracts
-(`User`, `Report`, `Screenshot`, `Video`, `Comment`) bind to Eloquent
-implementations in `src/Models/Database/`. The report↔user pivot
+dedicated SQLite connection named `redline`. All five models
+(`User`, `Report`, `Screenshot`, `Video`, `Comment`) are single concrete
+Eloquent models in `src/Models/`. The report↔user pivot
 (`redline_members`) is a plain `belongsToMany` on the report - it has no model
 of its own.
 
