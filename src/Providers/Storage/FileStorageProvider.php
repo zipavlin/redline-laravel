@@ -3,11 +3,13 @@
 namespace Zipavlin\Redline\Providers\Storage;
 
 use Zipavlin\Redline\Contracts\Listable;
+use Zipavlin\Redline\Models\Base\Assignment;
 use Zipavlin\Redline\Models\Base\Comment;
 use Zipavlin\Redline\Models\Base\Report;
 use Zipavlin\Redline\Models\Base\Screenshot;
 use Zipavlin\Redline\Models\Base\User;
 use Zipavlin\Redline\Models\Base\Video;
+use Zipavlin\Redline\Models\File\Assignment as FileAssignment;
 use Zipavlin\Redline\Models\File\Comment as FileComment;
 use Zipavlin\Redline\Models\File\Report as FileReport;
 use Zipavlin\Redline\Models\File\Screenshot as FileScreenshot;
@@ -41,6 +43,7 @@ class FileStorageProvider extends StorageProvider implements Listable
             Screenshot::class => FileScreenshot::class,
             Video::class => FileVideo::class,
             Comment::class => FileComment::class,
+            Assignment::class => FileAssignment::class,
         ];
     }
 

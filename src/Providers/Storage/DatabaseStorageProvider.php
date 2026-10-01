@@ -5,11 +5,13 @@ namespace Zipavlin\Redline\Providers\Storage;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 use Zipavlin\Redline\Contracts\Listable;
+use Zipavlin\Redline\Models\Base\Assignment;
 use Zipavlin\Redline\Models\Base\Comment;
 use Zipavlin\Redline\Models\Base\Report;
 use Zipavlin\Redline\Models\Base\Screenshot;
 use Zipavlin\Redline\Models\Base\User;
 use Zipavlin\Redline\Models\Base\Video;
+use Zipavlin\Redline\Models\Database\Assignment as DatabaseAssignment;
 use Zipavlin\Redline\Models\Database\Comment as DatabaseComment;
 use Zipavlin\Redline\Models\Database\Report as DatabaseReport;
 use Zipavlin\Redline\Models\Database\Screenshot as DatabaseScreenshot;
@@ -42,6 +44,7 @@ class DatabaseStorageProvider extends StorageProvider implements Listable
             Screenshot::class => DatabaseScreenshot::class,
             Video::class => DatabaseVideo::class,
             Comment::class => DatabaseComment::class,
+            Assignment::class => DatabaseAssignment::class,
         ];
     }
 
@@ -91,7 +94,8 @@ class DatabaseStorageProvider extends StorageProvider implements Listable
         $db = config('database.connections.redline.database', '');
 
         if ($db === ':memory:') {
-            if (! Schema::connection('redline')->hasTable('redline_reports')) {
+            if (! Schema::connection('redline')->hasTable('redline_reports')
+                || ! Schema::connection('redline')->hasTable('redline_assignments')) {
                 $this->runMigrations();
             }
 
@@ -110,6 +114,14 @@ class DatabaseStorageProvider extends StorageProvider implements Listable
         if (! Schema::connection('redline')->hasTable('redline_reports')) {
             throw new \RuntimeException(
                 'Redline database tables not found. Run `php artisan redline:install` to set up the database.'
+            );
+        }
+
+        // An install predating 0006 has reports but not assignments; surface the
+        // upgrade instead of letting every assignment query fail at runtime.
+        if (! Schema::connection('redline')->hasTable('redline_assignments')) {
+            throw new \RuntimeException(
+                'Redline database is missing the redline_assignments table. Run `php artisan redline:install` to migrate it.'
             );
         }
     }

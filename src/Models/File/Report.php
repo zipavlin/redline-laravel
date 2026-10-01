@@ -64,4 +64,9 @@ class Report extends BaseReport
     {
         return $this->hasMany(Comment::class, 'report_id')->orderBy('created_at');
     }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(Assignment::class, 'report_id');
+    }
 }

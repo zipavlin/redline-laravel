@@ -14,6 +14,7 @@ use Zipavlin\Redline\Enums\Status;
 use Zipavlin\Redline\Http\Query\QuerySchema;
 use Zipavlin\Redline\Http\Query\ResourceQuery;
 use Zipavlin\Redline\Mail\NewReportMail;
+use Zipavlin\Redline\Models\Base\Assignment;
 use Zipavlin\Redline\Models\Base\Report;
 use Zipavlin\Redline\Models\Base\User;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
@@ -142,7 +143,7 @@ class ReportController extends Controller
     /**
      * DELETE /redline/api/report/{report}
      *
-     * Delete report and associated media files. Own or admin.
+     * Delete report, its assignments and associated media files. Own or admin.
      */
     public function destroy(Request $request, Report $report): Response|JsonResponse
     {
@@ -152,6 +153,10 @@ class ReportController extends Controller
 
         $this->storage->deleteScreenshot($report->screenshot?->path);
         $this->storage->deleteVideo($report->video?->path);
+
+        // Per-model delete so the Orbit/File driver also removes each junction's
+        // JSON file - a query-builder mass delete skips those model events.
+        $report->assignments()->get()->each(fn (Assignment $assignment) => $assignment->delete());
 
         $report->delete();
 

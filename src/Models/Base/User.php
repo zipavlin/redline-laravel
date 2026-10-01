@@ -125,6 +125,8 @@ abstract class User extends Model
 
     abstract public function comments(): HasMany;
 
+    abstract public function assignments(): HasMany;
+
     /**
      * The query grammar whitelist for the admin-only /user collection endpoint.
      *

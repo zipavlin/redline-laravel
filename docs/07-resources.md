@@ -194,6 +194,8 @@ All report routes are protected. Route names: only the auth routes and `bootstra
 | DELETE | `/report/{report}` | `ReportController@destroy` | DELETE (own or admin) |
 | POST | `/report/{report}/move` | `ReportController@move` | UPDATE (own or developer+) |
 | PATCH | `/report/{report}/status` | `ReportController@status` | UPDATE + transition rules |
+| POST | `/report/{report}/assignee` | `AssignmentController@store` | UPDATE (own or developer+) |
+| DELETE | `/report/{report}/assignee` | `AssignmentController@destroy` | UPDATE (own or developer+) |
 | GET | `/report/{report}/comment` | `CommentController@index` | LIST |
 | POST | `/report/{report}/comment` | `CommentController@store` | CREATE (+ `comments` feature) |
 | PATCH | `/report/{report}/comment/{comment}` | `CommentController@update` | EDIT (author only) |
@@ -273,7 +275,9 @@ else's body.
 ### `DELETE /report/{report}`
 
 Delete the report **and its associated media files** (screenshot/video paths), own or
-admin.
+admin. The report's assignment junction rows are deleted too, one model at a time (the
+File driver removes each junction JSON file through model events, which a mass delete
+would skip).
 
 - `204` No Content.
 
@@ -300,6 +304,27 @@ Body: `{ "status": "new"|"noticed"|"progress"|"resolved"|"done" }`.
 - `200` - the updated report.
 - `403` - `"Invalid status transition."` when the role/lifecycle disallows it.
 - `422` - invalid status value.
+
+### `POST/DELETE /report/{report}/assignee`
+
+```
+POST   /{redline.path}/api/report/{report}/assignee
+DELETE /{redline.path}/api/report/{report}/assignee
+```
+
+Body: `{ "user_ids": ["<uuid>", ...] }` - required, array, **1..100** ids (each a string
+up to 255 chars). Both are gated by `Operation::UPDATE` on the report (developer/admin or
+the report's author); everyone else gets `403`.
+
+- `POST` is **additive + idempotent**: only pairs that do not already exist are created,
+  so re-posting the same list is a no-op, not a `409`.
+- `DELETE` is idempotent: removing a pair that does not exist is a no-op.
+- Both return `200` with `{ "assignees": [ { "id", "name", "initials" }, ... ] }` - the
+  report's **full current list**, sorted by `name` then `id` (a total order), so the
+  client never has to refetch or reconcile.
+- Unknown ids, **pending** users, and **guest** users are not assignable -> `422`
+  (`"One or more user ids are unknown."`). `DELETE` does not validate existence - an
+  unknown id is simply a no-op.
 
 ### Comments
 
@@ -368,7 +393,8 @@ All user endpoints are **admin-only** (non-admin → `403` `"Admin access requir
   request; the user is still created with `status: approved`.
 - `PATCH /user/{user}` - partial update of `name`, `email`, `role`, `status`
   (`approved|pending`). Approving a pending user emails a `RegistrationApprovedMail`.
-- `DELETE /user/{user}` - `204`. Cannot delete the **last remaining admin** (422).
+- `DELETE /user/{user}` - `204`. Cannot delete the **last remaining admin** (422). Also
+  deletes that user's assignment junction rows (per-model delete).
 - `POST /user/{user}/approve` - sets `status: approved`; emails approval notification
   when the user was pending.
 - `POST /user/{user}/reset-password` - `{ "password": string (min 8) }`; bumps the
@@ -570,8 +596,10 @@ Filters:
 | `created_at` | date set (adds `from`,`to`,`gt`,`gte`,`lt`,`lte`) | inclusive bounds |
 | `location` | string set | column filter |
 | `author` | relation set (`eq`,`not`,`in`,`not_in`,`exists`) | bare = FK equality; `author.id:in=a,b`; `author.name:like` delegated to User's schema via `relatedFilters` (only `name` is reachable - `author.email:like` 422s) |
+| `assignee` | relation set (`eq`,`not`,`in`,`not_in`,`exists`) | relation over the assignment junction: bare/`assignee.id` = `assignments.user_id` equality; `:in`/`:not`/`:not_in` over that column; `:exists` = has/doesn't have any assignee. **No nested attribute delegation** - `assignee.name:like` / `assignee.name:eq` 422s |
 | `search` | `like` only | virtual OR-field: `body` OR `location` LIKE `%value%` |
 | `mine` | `eq` only | truthy → `author_id = current user` |
+| `assigned` | `eq` only | strict `1`/`true` = assigned to the caller, `0`/`false` = not assigned; anything else 422s (never a silent no-op) |
 | `screenshot` | `exists` only | has/doesn't have a screenshot |
 | `video` | `exists` only | has/doesn't have a video |
 | `comments` | `exists` only | has/doesn't have comments |
@@ -590,6 +618,7 @@ Includes:
 | `screenshot` | relation / `:exists` | attributes `id,url` |
 | `video` | relation / `:exists` | attributes `id,url` |
 | `comments` | relation / `:count` / `:exists` | fixed shape: `{ id, body, created_at, author: { id, name } \| null }` |
+| `assignees` | relation / `:count` / `:exists` | the assignment junction's users, fixed shape `{ id, name, initials }` sorted by name then id. The Eloquent relation is `assignments`, so `withCount`/`withExists` attach `assignments_count`/`assignments_exists`; `serialize()` emits the **target-named** keys `assignees_count`/`assignees_exists` |
 
 Aggregates:
 

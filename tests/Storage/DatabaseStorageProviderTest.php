@@ -1,11 +1,13 @@
 <?php
 
 use Illuminate\Support\Str;
+use Zipavlin\Redline\Models\Base\Assignment as BaseAssignment;
 use Zipavlin\Redline\Models\Base\Comment as BaseComment;
 use Zipavlin\Redline\Models\Base\Report as BaseReport;
 use Zipavlin\Redline\Models\Base\Screenshot as BaseScreenshot;
 use Zipavlin\Redline\Models\Base\User as BaseUser;
 use Zipavlin\Redline\Models\Base\Video as BaseVideo;
+use Zipavlin\Redline\Models\Database\Assignment;
 use Zipavlin\Redline\Models\Database\Comment;
 use Zipavlin\Redline\Models\Database\Report;
 use Zipavlin\Redline\Models\Database\Screenshot;
@@ -22,15 +24,16 @@ beforeEach(function () {
 // register()
 // ---------------------------------------------------------------------------
 
-it('register() returns a map of all five model bindings', function () {
+it('register() returns a map of all six model bindings', function () {
     $bindings = $this->provider->register();
 
-    expect($bindings)->toHaveCount(5)
+    expect($bindings)->toHaveCount(6)
         ->and($bindings[BaseUser::class])->toBe(User::class)
         ->and($bindings[BaseReport::class])->toBe(Report::class)
         ->and($bindings[BaseScreenshot::class])->toBe(Screenshot::class)
         ->and($bindings[BaseVideo::class])->toBe(Video::class)
-        ->and($bindings[BaseComment::class])->toBe(Comment::class);
+        ->and($bindings[BaseComment::class])->toBe(Comment::class)
+        ->and($bindings[BaseAssignment::class])->toBe(Assignment::class);
 });
 
 // ---------------------------------------------------------------------------
@@ -61,14 +64,15 @@ it('after boot(), app(BaseReport::class) resolves to a Report instance', functio
     expect(app(BaseReport::class))->toBeInstanceOf(Report::class);
 });
 
-it('after boot(), all five base types resolve to their Database implementations', function () {
+it('after boot(), all six base types resolve to their Database implementations', function () {
     $this->provider->boot();
 
     expect(app(BaseUser::class))->toBeInstanceOf(User::class)
         ->and(app(BaseReport::class))->toBeInstanceOf(Report::class)
         ->and(app(BaseScreenshot::class))->toBeInstanceOf(Screenshot::class)
         ->and(app(BaseVideo::class))->toBeInstanceOf(Video::class)
-        ->and(app(BaseComment::class))->toBeInstanceOf(Comment::class);
+        ->and(app(BaseComment::class))->toBeInstanceOf(Comment::class)
+        ->and(app(BaseAssignment::class))->toBeInstanceOf(Assignment::class);
 });
 
 // ---------------------------------------------------------------------------

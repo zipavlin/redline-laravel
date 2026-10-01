@@ -16,6 +16,7 @@ use Zipavlin\Redline\Http\Query\IncludeField;
 use Zipavlin\Redline\Http\Query\QuerySchema;
 use Zipavlin\Redline\Http\Query\ResourceQuery;
 use Zipavlin\Redline\Models\Concerns\HasQuerySchema;
+use Zipavlin\Redline\Support\AssigneeRow;
 
 abstract class Report extends Model
 {
@@ -87,6 +88,8 @@ abstract class Report extends Model
 
     abstract public function comments(): HasMany;
 
+    abstract public function assignments(): HasMany;
+
     /**
      * The query grammar whitelist for this resource - see the grammar docblock
      * on QuerySchema for the wire format each entry below enables.
@@ -143,6 +146,16 @@ abstract class Report extends Model
                     relatedSchema: fn () => User::querySchema(),
                     relatedFilters: ['name'],
                 ),
+                // Relation filter over the assignment junction: `filter[assignee]=<uuid>`
+                // -> whereHas on assignments.user_id. No relatedSchema/relatedFilters on
+                // purpose - the mechanism cannot reach an attribute on a model reached
+                // THROUGH a junction, so `filter[assignee.name:like]` stays unsupported
+                // and 422s on the operator allowlist instead of silently widening.
+                'assignee' => new FilterField(
+                    operators: QueryOperator::relation(),
+                    relation: 'assignments',
+                    relationColumn: 'user_id',
+                ),
                 // Virtual OR-field: matches the pre-grammar `search` box (body OR location).
                 'search' => new FilterField(
                     operators: [QueryOperator::LIKE],
@@ -159,6 +172,34 @@ abstract class Report extends Model
                         if (FilterField::truthy($value)) {
                             $query->where('author_id', $rq->user()?->id);
                         }
+                    },
+                ),
+                // `filter[assigned]=1` -> "assigned to me"; `=0` -> "not assigned to me"
+                // (never a silent no-op, so a typo cannot widen the result set).
+                // Complements `filter[mine]=1` (authored by me).
+                'assigned' => new FilterField(
+                    operators: [QueryOperator::EQ],
+                    resolver: function (Builder $query, string $operator, mixed $value, ResourceQuery $rq): void {
+                        $userId = $rq->user()?->id;
+
+                        $value
+                            ? $query->whereHas('assignments', fn (Builder $inner) => $inner->where('user_id', $userId))
+                            : $query->doesntHave('assignments', 'and', fn (Builder $inner) => $inner->where('user_id', $userId));
+                    },
+                    // Strict parse-time truthy/falsy so a typo'd value 422s instead of
+                    // falling through the resolver's falsy branch as "not assigned".
+                    normalize: function (mixed $value, string $operator, array &$errors): ?bool {
+                        if (FilterField::truthy($value)) {
+                            return true;
+                        }
+
+                        if (FilterField::falsy($value)) {
+                            return false;
+                        }
+
+                        $errors['filter.assigned'] = ["Invalid value [{$value}] for filter[assigned] - use 1/true or 0/false."];
+
+                        return null;
                     },
                 ),
                 // Relationship existence. `=1`/`true` -> has(), `=0`/`false` -> doesntHave();
@@ -208,6 +249,24 @@ abstract class Report extends Model
                     relation: 'author',
                     attributes: ['id', 'name', 'email'],
                     default: ['id', 'name'],
+                ),
+                // Target name is `assignees`; the Eloquent relation is `assignments`.
+                // withCount()/withExists() attach relation-named `assignments_count`/
+                // `assignments_exists`, while serialize() emits target-named
+                // `assignees_count`/`assignees_exists` - see ResourceQuery::serialize().
+                // Do NOT "fix" IncludeField::value() to read the target name: the
+                // attribute attached to the model really is relation-named.
+                'assignees' => new IncludeField(
+                    relation: 'assignments',
+                    operators: [QueryOperator::COUNT, QueryOperator::EXISTS],
+                    eagerLoad: ['assignments.user:id,name'],
+                    resolver: function (Report $report): ?array {
+                        if (! $report->relationLoaded('assignments')) {
+                            return null;
+                        }
+
+                        return AssigneeRow::fromAssignments($report->assignments);
+                    },
                 ),
                 // `url` reads Screenshot::$report_id and $id - both are always
                 // selected regardless of the requested attribute list.

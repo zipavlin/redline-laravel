@@ -91,6 +91,16 @@ final class FilterField
             return null;
         }
 
+        // A dotted `filter[<target>.<attribute>]` key whose attribute is neither the
+        // bare-relation `id` shorthand nor backed by a related schema has nowhere to
+        // go: without this, `filter[assignee.name:eq]=Zoe` would drop `name` and
+        // silently apply `Zoe` against the junction's user_id column instead of 422ing.
+        if ($attribute !== null && $attribute !== 'id' && $this->relatedSchema === null) {
+            $errors["filter.{$key}"] = ["Filter target [{$target}] does not expose attribute [{$attribute}]."];
+
+            return null;
+        }
+
         // run passed normalize callable
         if ($this->normalize) {
             $before = $errors;

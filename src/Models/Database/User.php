@@ -20,4 +20,9 @@ class User extends BaseUser
     {
         return $this->hasMany(Comment::class, 'author_id');
     }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(Assignment::class, 'user_id');
+    }
 }

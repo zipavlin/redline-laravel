@@ -63,7 +63,7 @@ Configured via `REDLINE_STORAGE_PROVIDER` / `config('redline.storage.provider')`
 
 | Provider | Backing | Notes |
 |---|---|---|
-| `DatabaseStorageProvider` (default) | Eloquent + own SQLite connection at `storage/app/redline/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0005_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
+| `DatabaseStorageProvider` (default) | Eloquent + own SQLite connection at `storage/app/redline/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0006_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
 | `FileStorageProvider` | JSON files via `ryangjchandler/orbit` | **Optional** `suggest` in composer.json - not installed in the dev env, hence the skips. Requires Laravel 12+. |
 
 ### Query grammar - `src/Http/Query/`
@@ -80,6 +80,37 @@ reference.
 - `AggregateField` - count/unique/exists with optional `group_by[]`.
 - `ParsedQuery` - immutable result; controllers call `->rows()` / `->aggregate()` /
   `->statusCounts()`.
+
+### Report assignees - `Base\Assignment` junction
+
+Many-to-many report ↔ user assignees live in a junction model triad
+(`Base\Assignment` / `Database\Assignment` (`redline_assignments`) / `File\Assignment`
+(JSON `assignments/`)), all bound through the storage providers like the other models.
+The File model carries the same top-of-file `orbitConfigured()` guard as the rest.
+Migration `0006_create_redline_assignments_table.php` deliberately has **no foreign
+keys** (the File driver cannot enforce them) - `unique(report_id, user_id)` + a `user_id`
+index instead. Cleanup is therefore **per-model delete** (`->get()->each(fn ($a) =>
+$a->delete())`) in both `ReportController::destroy()` and `UserController::destroy()`;
+never a query-builder mass delete, which would skip the Orbit file-removal model events.
+
+Endpoints (inside the protected `RedlineApiAuth` + `RedlineCsrf` group, both gated by
+`Operation::UPDATE` on the report - developer/admin/author):
+
+| Method | Path | Behaviour |
+|---|---|---|
+| POST | `/report/{report}/assignee` | body `{"user_ids": [...]}`; additive + idempotent; unknown ids → 422 |
+| DELETE | `/report/{report}/assignee` | body `{"user_ids": [...]}`; idempotent; removes only existing pairs |
+
+Both respond `{ "assignees": [ { id, name, initials } ] }` - the report's full current
+list, sorted by `name` then `id`.
+
+Read grammar on `Base\Report::querySchema()`: include target `assignees` (relation
+`assignments`; bare / `:count` / `:exists`), filter target `assignee` (relation operators
+over `assignments.user_id`), and filter target `assigned` (`=1` assigned to me, `=0` not
+assigned to me). Note the target-vs-relation naming: `withCount`/`withExists` attach
+`assignments_count`/`assignments_exists`, while `serialize()` emits target-named
+`assignees_count`/`assignees_exists`. `filter[assignee.name:like]` is **not** supported
+(no `relatedSchema` on that filter) and 422s, as intended.
 
 ### Guard & auth providers (pluggable)
 

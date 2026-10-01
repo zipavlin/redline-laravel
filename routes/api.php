@@ -4,6 +4,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Zipavlin\Redline\Http\Controllers\Api\AssignmentController;
 use Zipavlin\Redline\Http\Controllers\Api\AuthController;
 use Zipavlin\Redline\Http\Controllers\Api\BootstrapController;
 use Zipavlin\Redline\Http\Controllers\Api\CommentController;
@@ -81,6 +82,10 @@ Route::prefix(config('redline.path', 'redline').'/api')->middleware(SubstituteBi
         Route::delete('report/{report}', [ReportController::class, 'destroy']);
         Route::post('report/{report}/move', [ReportController::class, 'move']);
         Route::patch('report/{report}/status', [ReportController::class, 'status']);
+
+        // Assignees
+        Route::post('report/{report}/assignee', [AssignmentController::class, 'store']);
+        Route::delete('report/{report}/assignee', [AssignmentController::class, 'destroy']);
 
         // Comments
         Route::get('report/{report}/comment', [CommentController::class, 'index']);
