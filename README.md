@@ -178,10 +178,6 @@ Eloquent models on a dedicated SQLite connection at `storage/app/redline/redline
 Requires `pdo_sqlite`. Schema (numbered migrations `0001`–`0005`) is created by
 `php artisan redline:install`.
 
-### JSON files - `FileStorageProvider`
-
-One JSON file storage via `ryangjchandler/orbit`. Requires Laravel 12+. Optional dependency -
-install with `composer require ryangjchandler/orbit` when you choose this backend.
 
 ---
 
@@ -222,8 +218,7 @@ this repo's `public/` (committed), and published via
 composer test
 ```
 
-Current baseline: **251 passed, 3 skipped** (the skips are Orbit-gated
-`FileDriverGrammarTest` tests that skip when `ryangjchandler/orbit` is not installed).
+Current baseline: **323 passed, 0 skipped** (959 assertions).
 
 ---
 

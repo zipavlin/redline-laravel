@@ -84,7 +84,7 @@ abstract class User extends Model
     /**
      * Invalidate every JWT issued for this user by advancing token_version.
      * Called on logout and password change. Set directly (not mass-assigned) so
-     * it works across Eloquent (Database) and Orbit (File) implementations.
+     * the increment is not subject to the model's fillable whitelist.
      */
     public function bumpTokenVersion(): void
     {

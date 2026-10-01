@@ -99,37 +99,6 @@ function cleanDatabaseStorage(): void
 }
 
 /**
- * Delete all JSON report files and media files from the test storage directory.
- */
-function cleanJsonStorage(): void
-{
-    $base = storage_path('app/redline');
-
-    if (! is_dir($base)) {
-        return;
-    }
-
-    foreach (glob($base.'/*.json') ?: [] as $f) {
-        unlink($f);
-    }
-
-    // Orbit (FileStorageProvider) writes one JSON file per record under
-    // <base>/database/<model>/ - without this the files leak across tests
-    // and get re-imported by Orbit's migrate() on the next boot.
-    foreach (glob($base.'/database/*/*.json') ?: [] as $f) {
-        unlink($f);
-    }
-
-    foreach (['screenshots', 'videos'] as $sub) {
-        foreach (glob($base.'/'.$sub.'/*') ?: [] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
-}
-
-/**
  * Ensure the storage directory tree exists for tests.
  */
 function ensureRedlineDirectories(): void

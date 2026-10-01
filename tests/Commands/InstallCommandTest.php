@@ -1,14 +1,10 @@
 <?php
 
 use Illuminate\Contracts\Console\Kernel;
-use Illuminate\Support\Facades\Hash;
 use Zipavlin\Redline\Commands\InstallCommand;
-use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Database\User as DatabaseUser;
 use Zipavlin\Redline\Providers\Auth\OpenAuthProvider;
 use Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider;
 use Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider;
-use Zipavlin\Redline\Providers\Storage\FileStorageProvider;
 
 /**
  * redline:install walks the user through interactive setup. In testbench there
@@ -83,53 +79,6 @@ it('accepts an empty features answer ("disable none") and completes the install'
         ->expectsConfirmation('Would you like to create the first admin user?', 'no')
         ->expectsOutputToContain('Redline installed successfully!')
         ->assertExitCode(0);
-});
-
-it('skips the first-admin-user step when File storage is selected without orbit', function () {
-    if (trait_exists('Orbit\Concerns\Orbital')) {
-        $this->markTestSkipped('orbit is installed - the without-orbit flow is untestable here.');
-    }
-
-    $this->artisan('redline:install')
-        ->expectsQuestion('Which storage backend would you like to use?', FileStorageProvider::title())
-        ->expectsConfirmation('Would you like to install ryangjchandler/orbit now?', 'no')
-        ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
-        ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
-        ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
-        ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
-        ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
-        ->expectsOutputToContain('Skipping admin user creation')
-        ->assertExitCode(0);
-});
-
-it('boots the newly chosen Database provider when creating the first admin user', function () {
-    // Simulate a stale bootstrap-time env left over from a previous install
-    // (e.g. REDLINE_STORAGE_PROVIDER=File): redline:user must boot the provider
-    // the user just picked, not the stale one from config.
-    config(['redline.storage.provider' => FileStorageProvider::class]);
-
-    $this->artisan('redline:install')
-        ->expectsQuestion('Which storage backend would you like to use?', DatabaseStorageProvider::title())
-        ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
-        ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
-        ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
-        ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
-        ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
-        ->expectsConfirmation('Would you like to create the first admin user?', 'yes')
-        ->expectsQuestion('Name', 'Zig Staging')
-        ->expectsQuestion('Email', 'zig@example.com')
-        ->expectsQuestion('Password (min 6 characters)', 'secret123')
-        ->expectsQuestion('Role', 'admin')
-        ->expectsOutputToContain('Redline installed successfully!')
-        ->assertExitCode(0);
-
-    $user = app(DatabaseUser::class)->where('email', 'zig@example.com')->first();
-
-    expect($user)->not->toBeNull()
-        ->and(Hash::check('secret123', $user->password))->toBeTrue()
-        ->and($user->role)->toBe(Role::ADMIN);
 });
 
 it('writes the SMTP mailer values when the no-DNS SMTP option is chosen', function () {

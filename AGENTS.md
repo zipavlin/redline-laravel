@@ -47,13 +47,9 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-With `ryangjchandler/orbit` installed, `vendor/bin/pest` reports **333 passed, 2 skipped
-(995 assertions)**. The 2 skips are the without-Orbit failure paths in
-`tests/Commands/CreateUserCommandTest.php` and `tests/Commands/InstallCommandTest.php`.
-Without Orbit, the File-storage suites skip gracefully instead
-(`tests/Models/FileDriverGrammarTest.php`, `tests/Http/DomainAuthFileStorageTest.php`,
-`tests/Http/UserControllerFileStorageTest.php`, `tests/Auth/LaravelAuthProviderFileStorageTest.php`).
-Skip counts are environment-dependent. Never assume Orbit is available.
+`vendor/bin/pest` reports **323 passed, 0 skipped (959 assertions)**. There are no
+orbit-gated or otherwise environment-dependent skips left - the package has a single
+storage backend.
 
 ## Architecture
 
@@ -64,7 +60,6 @@ Configured via `REDLINE_STORAGE_PROVIDER` / `config('redline.storage.provider')`
 | Provider | Backing | Notes |
 |---|---|---|
 | `DatabaseStorageProvider` (default) | Eloquent + own SQLite connection at `storage/app/redline/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0005_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
-| `FileStorageProvider` | JSON files via `ryangjchandler/orbit` | **Optional** `suggest` in composer.json - not installed in the dev env, hence the skips. Requires Laravel 12+. |
 
 ### Query grammar - `src/Http/Query/`
 
@@ -167,16 +162,13 @@ from element attributes.
 ## Testing quirks
 
 - Pest helpers in `tests/Pest.php`: `makeReportData()`, `makeUser()`, `makeAuthToken()`,
-  `authHeaders()`, `cleanDatabaseStorage()`, `cleanJsonStorage()`,
-  `ensureRedlineDirectories()`.
+  `authHeaders()`, `cleanDatabaseStorage()`, `ensureRedlineDirectories()`.
 - Each test gets a fresh in-memory SQLite database (Orchestra Testbench;
   `database.connections.redline` pre-set to `:memory:`).
 - `tests/TestCase.php` boots with `APP_ENV=staging` + `app.debug=true`, re-wires the
   pluggable providers, routes and views (the real service provider skips that wiring
   under `runningInConsole()`), appends `ShowRedlineWidget` to the `web` group, and
   disables Laravel's built-in CSRF for tests.
-- `tests/Models/FileDriverGrammarTest.php` - Orbit-gated, skips gracefully when
-  `ryangjchandler/orbit` is not installed.
 - `tests/ArchTest.php` (pest-plugin-arch) - global ban on `dd`, `dump`, `ray`.
 - JWT signing key in tests is `config('app.key')` (decoded when `base64:`-prefixed).
 - `testbench.yaml` is present and **committed** (was gitignored in the legacy monorepo).

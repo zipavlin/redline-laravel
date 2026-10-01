@@ -41,11 +41,6 @@ Writes `REDLINE_STORAGE_PROVIDER` with the selected provider's FQCN.
   ✓ Redline database tables created.
   ```
 
-- **File** - `Zipavlin\Redline\Providers\Storage\FileStorageProvider`. If
-  `ryangjchandler/orbit` is not installed you are offered to install it right away
-  (`composer require ryangjchandler/orbit`); if that is skipped, the command tells you to run
-  `redline:install` again afterwards.
-
 ### Step 2 - Auth provider
 
 ```
@@ -133,9 +128,7 @@ First admin user
 Would you like to create the first admin user? [yes]
 ```
 
-Runs `redline:user` in-process. (If you chose the File storage backend but orbit is still not
-installed, this is skipped with instructions to run `composer require ryangjchandler/orbit &&
-php artisan redline:user` manually.)
+Runs `redline:user` in-process.
 
 The command finishes with next steps:
 
@@ -226,8 +219,6 @@ Please write 'staging' to continue:
    `resources/views/vendor/redline`.
 4. **`.env` entries** - every line whose key starts with `REDLINE_` is stripped (other lines,
    including any `MAIL_*` keys the installer wrote, are left byte-for-byte intact).
-5. **Orbit cache** - only when the File provider with orbit is active; asks for confirmation (or
-   removes it automatically under `--force`).
 
 ### Manual-cleanup scan
 
