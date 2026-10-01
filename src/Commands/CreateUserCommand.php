@@ -21,11 +21,8 @@ class CreateUserCommand extends Command
         $this->line('  <fg=red>●</> <options=bold>Redline</> - create user');
         $this->line('');
 
-        /** @var class-string<StorageProvider> $storageClass */
-        $storageClass = config('redline.storage.provider');
-
         try {
-            (new $storageClass)->boot();
+            (new StorageProvider)->boot();
         } catch (RuntimeException $e) {
             $this->error($e->getMessage());
 

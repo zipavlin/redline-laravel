@@ -8,7 +8,7 @@ Redline is a Composer package that installs into an existing Laravel application
 |---|---|
 | PHP | `^8.3` or `^8.4` |
 | Laravel | 11.x, 12.x or 13.x (`illuminate/contracts` + `illuminate/database` `^11.0\|\|^12.0\|\|^13.0`) |
-| SQLite driver | `pdo_sqlite` - required by the default `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` |
+| SQLite driver | `pdo_sqlite` - required by the storage backend |
 
 ## Composer install
 
@@ -22,22 +22,22 @@ The package registers itself through Laravel's package auto-discovery (`extra.la
 
 ## Interactive setup - `php artisan redline:install`
 
-The recommended path. The command walks you through storage, auth, guard, features, email, publishing, and the first admin user, writing the chosen values straight into `.env` (updating existing keys, appending new ones; if no `.env` is found it warns and skips the write). Provider values are stored as fully-qualified class names.
+The recommended path. The command walks you through auth, guard, features, email, publishing, and the first admin user, writing the chosen values straight into `.env` (updating existing keys, appending new ones; if no `.env` is found it warns and skips the write). Provider values are stored as fully-qualified class names.
 
 Check detailed information about each step in [08-commands.md](08-commands.md#redlineinstall)
 
-1. **Storage provider** - *"Controls how data is saved."*
-   - `Database (SQLite - recommended)` → `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` (default selection)
+1. **Storage** - *"Controls how data is saved."*
 
-   Writes `REDLINE_STORAGE_PROVIDER`.
-
-   For the **Database** provider the installer then creates the schema itself: it makes sure `storage/app/redline/database/` exists, wires up the `redline` SQLite connection in-process, and runs
+   There is one backend, so there is no choice: the installer makes sure
+   `storage/app/redline/database/` exists, wires up the `redline` SQLite
+   connection in-process, and runs
 
    ```bash
    php artisan migrate --path=vendor/zipavlin/redline/database/redline --database=redline
    ```
 
-   which executes the package's numbered migrations `0001_`–`0005_` against `storage/app/redline/database/redline.db`.
+   which executes the package's numbered migrations `0001_`–`0005_` against
+   `storage/app/redline/database/redline.db`.
 
 2. **Auth provider** - *"Controls how users register and which roles they can claim."*
 
@@ -89,7 +89,6 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
 
 | Variable | Example value | Purpose |
 |---|---|---|
-| `REDLINE_STORAGE_PROVIDER` | `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` | Storage backend FQCN |
 | `REDLINE_AUTH_PROVIDER` | `Zipavlin\Redline\Providers\Auth\OpenAuthProvider` | Auth provider FQCN |
 | `REDLINE_AUTH_PIN_REPORTER` / `REDLINE_AUTH_PIN_DEVELOPER` | - | PIN per role (Pin provider only) |
 | `REDLINE_AUTH_DOMAINS` | `example.com,acme.org` | Allowed domains (Domain provider only) |
@@ -111,7 +110,7 @@ Only needed if you skip the installer and configure everything through `.env` yo
 
 These three tags are available in **every** environment - they are not gated by the guard. If you publish the config, remember that every `env()` call in it can still be overridden from `.env`; many setups skip `redline-config` entirely and configure Redline only through environment variables.
 
-> For the **Database** provider, the schema is **not** created automatically at runtime - the installer runs the migrations for you. If you configured storage manually and the tables are missing, the storage layer throws a `RuntimeException` telling you to run `php artisan redline:install`.
+> The storage schema is **not** created automatically at runtime - the installer runs the migrations for you. If you configured storage manually and the tables are missing, the storage layer throws a `RuntimeException` telling you to run `php artisan redline:install`.
 
 ## Post-install checklist
 

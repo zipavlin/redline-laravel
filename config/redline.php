@@ -3,7 +3,6 @@
 use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Providers\Auth\OpenAuthProvider;
 use Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider;
-use Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider;
 
 return [
     // -------------------------------------------------------------------------
@@ -14,24 +13,9 @@ return [
     'path' => env('REDLINE_PATH', 'redline'),
 
     // -------------------------------------------------------------------------
-    // Cloud
-    // -------------------------------------------------------------------------
-    // Remote Redline API URL used by CloudStorageProvider. The widget points at
-    // this URL; no local models/routes/files are used.
-    'cloud_url' => env('REDLINE_CLOUD_URL', null),
-
-    // -------------------------------------------------------------------------
     // Storage
     // -------------------------------------------------------------------------
     'storage' => [
-        // Provider
-        // Which storage provider to use. Default: DatabaseStorageProvider (always - set
-        // REDLINE_STORAGE_PROVIDER explicitly to switch; there is no automatic fallback).
-        // Options:
-        //   DatabaseStorageProvider  - Eloquent + own SQLite (default; requires pdo_sqlite)
-        //   CloudStorageProvider     - widget points to a remote Redline API; no local storage
-        'provider' => env('REDLINE_STORAGE_PROVIDER', DatabaseStorageProvider::class),
-
         // Path
         // Where to store files. Default: 'redline'
         'path' => [

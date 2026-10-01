@@ -52,7 +52,6 @@ All settings are read from `config/redline.php`, which maps to these env variabl
 | Variable | Default | Purpose |
 |---|---|---|
 | `REDLINE_PATH` | `redline` | URL prefix for all routes (`/redline/api/...`, `/redline`) |
-| `REDLINE_STORAGE_PROVIDER` | `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` | Storage backend class |
 | `REDLINE_STORAGE_PATH_BASE` | `redline` | Base dir under `storage/app/` |
 | `REDLINE_STORAGE_PATH_SCREENSHOTS` | `screenshots` | Screenshot subdir |
 | `REDLINE_STORAGE_PATH_VIDEOS` | `videos` | Video subdir |
@@ -77,7 +76,6 @@ All settings are read from `config/redline.php`, which maps to these env variabl
 | `REDLINE_ALLOWED_ORIGINS` | *(none)* | Escape hatch for cookie-mutation Origin checks (reverse proxies) |
 | `REDLINE_DISABLED` | *(none)* | Comma-separated features to disable: `screenshots, videos, files, comments, mentions` |
 | `REDLINE_MAIL` | `true` | Kill switch for all Redline emails |
-| `REDLINE_CLOUD_URL` | *(none)* | Remote Redline API URL (cloud backend - planned, not yet implemented) |
 | `REDLINE_VITE_URL` | *(none)* | Dev-only: serve the frontend from the Vite dev server (see "Frontend development") |
 
 > Keep the data out of your app's git history:
@@ -170,13 +168,11 @@ php artisan redline:remove
 
 ---
 
-## Storage backends
+## Storage
 
-### Database (default) - `DatabaseStorageProvider`
-
-Eloquent models on a dedicated SQLite connection at `storage/app/redline/redline.db`.
-Requires `pdo_sqlite`. Schema (numbered migrations `0001`–`0005`) is created by
-`php artisan redline:install`.
+Eloquent models on a dedicated SQLite connection at
+`storage/app/redline/database/redline.db`. Requires `pdo_sqlite`. The schema
+(numbered migrations `0001`–`0005`) is created by `php artisan redline:install`.
 
 
 ---
@@ -218,7 +214,7 @@ this repo's `public/` (committed), and published via
 composer test
 ```
 
-Current baseline: **323 passed, 0 skipped** (959 assertions).
+Current baseline: **322 passed, 0 skipped** (953 assertions).
 
 ---
 

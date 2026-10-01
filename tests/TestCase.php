@@ -35,25 +35,22 @@ class TestCase extends Orchestra
     protected function bootRedlineForTests(): void
     {
         $this->app->singleton(GuardProvider::class, fn () => new (config('redline.guard.provider')));
-        $this->app->singleton(StorageProvider::class, fn () => new (config('redline.storage.provider')));
         $this->app->singleton(AuthProvider::class, fn () => new (config('redline.auth.provider')));
 
         /** @var StorageProvider $storage */
         $storage = $this->app->make(StorageProvider::class);
         $storage->boot();
 
-        if ($storage->isLocal()) {
-            $this->loadRoutesFrom(dirname(__DIR__).'/routes/web.php');
-            $this->loadRoutesFrom(dirname(__DIR__).'/routes/api.php');
-            $this->loadViewsFrom(dirname(__DIR__).'/resources/views', 'redline');
+        $this->loadRoutesFrom(dirname(__DIR__).'/routes/web.php');
+        $this->loadRoutesFrom(dirname(__DIR__).'/routes/api.php');
+        $this->loadViewsFrom(dirname(__DIR__).'/resources/views', 'redline');
 
-            // The framework's RouteServiceProvider refreshes the route name lookup
-            // after loading routes; the plain `require` above skips that, so fluent
-            // ->name() routes stay invisible to route()/signed URLs during the first
-            // request of a test. Mirror the real bootstrap so they resolve from the
-            // very first request.
-            $this->app['router']->getRoutes()->refreshNameLookups();
-        }
+        // The framework's RouteServiceProvider refreshes the route name lookup
+        // after loading routes; the plain `require` above skips that, so fluent
+        // ->name() routes stay invisible to route()/signed URLs during the first
+        // request of a test. Mirror the real bootstrap so they resolve from the
+        // very first request.
+        $this->app['router']->getRoutes()->refreshNameLookups();
 
         // The service provider appends InjectRedline to the `web` group only
         // outside the console; reproduce it so the middleware is exercised here.
@@ -96,8 +93,8 @@ class TestCase extends Orchestra
         $app['config']->set('cache.default', 'array');
 
         // Pre-configure the redline connection as in-memory SQLite so that
-        // DatabaseStorageProvider does not create a physical file during tests.
-        // DatabaseStorageProvider.configureConnection() skips if already set.
+        // StorageProvider does not create a physical file during tests.
+        // StorageProvider::boot() skips connection setup if already configured.
         $app['config']->set('database.connections.redline', [
             'driver' => 'sqlite',
             'database' => ':memory:',

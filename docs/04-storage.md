@@ -1,35 +1,16 @@
 # Storage
 
-Redline persists reports, users, comments and media through a pluggable storage
-provider. The provider decides where data lives and is selected with a single
-environment variable.
+Redline persists reports, users, comments and media in a single
+local backend: Eloquent models on a dedicated SQLite connection named `redline`,
+plus uploaded media under `storage/app/{path.base}`. There is no pluggable
+storage provider - custom storage backends are **not supported**.
 
-## Choosing a provider
+## Database storage
 
-The active provider is `config('redline.storage.provider')`, set from
-`REDLINE_STORAGE_PROVIDER`.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `REDLINE_STORAGE_PROVIDER` | `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` | Fully-qualified class name of the storage backend to use. |
-
-> **No automatic fallback.** The default is always `DatabaseStorageProvider`. If
-> the configured class is invalid the package fails at boot rather than silently
-> falling back - set `REDLINE_STORAGE_PROVIDER` explicitly to switch.
-
-`php artisan redline:install` handles the wiring for you:
-
-1. It prompts for a backend, offering only provider classes that actually exist.
-2. It writes `REDLINE_STORAGE_PROVIDER=<FQCN>` into the host app's `.env`.
-3. For `DatabaseStorageProvider` it configures the `redline` connection and runs
-   the package migrations.
-
-## Database storage (default)
-
-`Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` - Eloquent models on a
+`Zipavlin\Redline\Providers\Storage\StorageProvider` - Eloquent models on a
 dedicated SQLite connection named `redline`. All five model contracts
-(`User`, `Report`, `Screenshot`, `Video`, `Comment`) bind to Eloquent
-implementations in `src/Models/Database/`.
+(`User`, `Report`, `Screenshot`, `Video`, `Comment`) bind to
+Eloquent implementations in `src/Models/Database/`.
 
 ### Where the database lives
 
@@ -42,9 +23,7 @@ storage/app/redline/database/redline.db
 ```
 
 > The location is fully configurable via `REDLINE_STORAGE_PATH_BASE` and
-> `REDLINE_STORAGE_PATH_DATABASE`. Note that older documentation (README,
-> AGENTS.md) says `storage/app/redline/redline.db` - the code actually appends
-> the `database` subdirectory, so the file is one level deeper.
+> `REDLINE_STORAGE_PATH_DATABASE`.
 
 The connection is created at boot and is skipped if `database.connections.redline`
 is already configured (the test suite injects `:memory:` this way).
@@ -91,7 +70,7 @@ storage/app/redline/
 ├── screenshots/          # {ordered-uuid}.png
 ├── videos/               # {uuid}.{mp4|webm}
 └── database/
-    └── redline.db        # DatabaseStorageProvider
+    └── redline.db        # SQLite database
 ```
 
 The directories are created automatically by the provider's `boot()`.
@@ -138,12 +117,6 @@ Deleting a report also deletes its screenshot/video files from disk.
 - **Backup**: back up the whole `storage/app/redline/` directory - the database
   file plus `screenshots/` and `videos/`. Restoring the directory restores both
   data and media, so database and files stay in sync.
-- With a future cloud provider there is nothing local to back up; media and data
-  would live on the remote API.
-
-## Custom Storage Provider
-- Extend `Zipavlin\Redline\Providers\Storage\StorageProvider` and register it
-  in `config.redline.storage.provider` or `REDLINE_STORAGE_PROVIDER`.
 
 ## Related
 

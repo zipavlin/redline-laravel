@@ -14,12 +14,10 @@ Every key in `config/redline.php` and the env var that backs it:
 | Variable | Default | Purpose |
 |---|---|---|
 | `REDLINE_PATH` | `redline` | URL prefix for all Redline routes (`/redline/api/...` and the dashboard at `/redline`). See [Changing the URL prefix](#changing-the-url-prefix). |
-| `REDLINE_CLOUD_URL` | *(none)* | Remote Redline API URL for `CloudStorageProvider`; the widget points at this URL and no local models/routes/files are used. **Planned - the provider is not implemented yet; ignore until a release announces it.** |
-| `REDLINE_STORAGE_PROVIDER` | `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` | Storage backend class. Must be set explicitly to switch - there is no automatic fallback. See the [Storage chapter](04-storage.md). |
 | `REDLINE_STORAGE_PATH_BASE` | `redline` | Base directory under `storage/app/` where Redline stores its data. |
 | `REDLINE_STORAGE_PATH_SCREENSHOTS` | `screenshots` | Subdirectory for screenshot uploads. |
 | `REDLINE_STORAGE_PATH_VIDEOS` | `videos` | Subdirectory for video uploads. |
-| `REDLINE_STORAGE_PATH_DATABASE` | `database` | Subdirectory for the SQLite database file (`redline.db`) used by `DatabaseStorageProvider`. |
+| `REDLINE_STORAGE_PATH_DATABASE` | `database` | Subdirectory for the SQLite database file (`redline.db`). |
 | `REDLINE_GUARD_PROVIDER` | `Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider` | Guard provider class deciding *when* Redline is active. Default is active when `APP_ENV=staging` **only** - the `APP_DEBUG` condition in the config comment is stale, the code checks nothing else. See the [Guards chapter](06-guards.md). |
 | `REDLINE_GUARD_EXCLUDE` | *(none)* | Comma-separated paths skipped for widget injection and API. Pattern forms: exact match or any subpath; trailing `/*` excludes subpaths only (parent not excluded); other `*` patterns are `fnmatch` globs. Full semantics in the [Guards chapter](06-guards.md). |
 | `REDLINE_AUTH_PROVIDER` | `Zipavlin\Redline\Providers\Auth\OpenAuthProvider` | Auth provider class deciding how users register and claim roles. See the [Authentication chapter](05-authentication.md). |

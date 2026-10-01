@@ -4,7 +4,6 @@ use Illuminate\Contracts\Console\Kernel;
 use Zipavlin\Redline\Commands\InstallCommand;
 use Zipavlin\Redline\Providers\Auth\OpenAuthProvider;
 use Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider;
-use Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider;
 
 /**
  * redline:install walks the user through interactive setup. In testbench there
@@ -69,7 +68,6 @@ function fakeInstallCommand(bool $composerSucceeds = true): InstallCommand
 
 it('accepts an empty features answer ("disable none") and completes the install', function () {
     $this->artisan('redline:install')
-        ->expectsQuestion('Which storage backend would you like to use?', DatabaseStorageProvider::title())
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
         ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
@@ -85,7 +83,6 @@ it('writes the SMTP mailer values when the no-DNS SMTP option is chosen', functi
     $command = fakeInstallCommand();
 
     $this->artisan('redline:install')
-        ->expectsQuestion('Which storage backend would you like to use?', DatabaseStorageProvider::title())
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
         ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
@@ -119,7 +116,6 @@ it('installs resend/resend-php and writes the API key when Resend is chosen', fu
     $command = fakeInstallCommand();
 
     $this->artisan('redline:install')
-        ->expectsQuestion('Which storage backend would you like to use?', DatabaseStorageProvider::title())
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
         ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
@@ -141,7 +137,6 @@ it('warns that a sending domain must be DNS-verified before the user commits to 
     fakeInstallCommand();
 
     $this->artisan('redline:install')
-        ->expectsQuestion('Which storage backend would you like to use?', DatabaseStorageProvider::title())
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
         ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
@@ -159,7 +154,6 @@ it('prints the composer warning and continues when the package install fails', f
     $command = fakeInstallCommand(composerSucceeds: false);
 
     $this->artisan('redline:install')
-        ->expectsQuestion('Which storage backend would you like to use?', DatabaseStorageProvider::title())
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
         ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')

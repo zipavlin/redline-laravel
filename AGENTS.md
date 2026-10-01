@@ -31,7 +31,7 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 ### PHP (Pest)
 ```
-composer test                    # full Pest suite (baseline: 333 passed, 2 skipped; see Test status)
+composer test                    # full Pest suite (baseline: 322 passed, 0 skipped; see Test status)
 composer test-coverage           # Pest + coverage
 composer format                  # pint (Laravel defaults; no pint.json)
 vendor/bin/pest --filter=Report  # single file / group
@@ -47,19 +47,20 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-`vendor/bin/pest` reports **323 passed, 0 skipped (959 assertions)**. There are no
-orbit-gated or otherwise environment-dependent skips left - the package has a single
-storage backend.
+`vendor/bin/pest` reports **322 passed, 0 skipped (953 assertions)**. There are no
+environment-dependent skips left - the package has a single storage backend.
 
 ## Architecture
 
-### Storage providers - `src/Providers/Storage/`
+### Storage - `src/Providers/Storage/`
 
-Configured via `REDLINE_STORAGE_PROVIDER` / `config('redline.storage.provider')`.
+The package has a single local storage backend: a concrete `StorageProvider`
+(Eloquent models on a dedicated SQLite connection). There is no multi-provider
+config and no custom-provider seam.
 
 | Provider | Backing | Notes |
 |---|---|---|
-| `DatabaseStorageProvider` (default) | Eloquent + own SQLite connection at `storage/app/redline/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0005_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
+| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0005_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
 
 ### Query grammar - `src/Http/Query/`
 
@@ -151,9 +152,9 @@ from element attributes.
 
 ### Artisan commands (only these exist)
 
-- `redline:install` - interactive setup (storage, auth provider, email, disabled
-  features, writes `.env`, publishes config+assets; for `DatabaseStorageProvider` it also
-  creates the schema).
+- `redline:install` - interactive setup (auth provider, email, disabled
+  features, writes `.env`, publishes config+assets; it also creates the SQLite
+  schema).
 - `redline:user` - admin create/grant.
 - `redline:remove` - wipe all redline data, removes redline from the project.
 

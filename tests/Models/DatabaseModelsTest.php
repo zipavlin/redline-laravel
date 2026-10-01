@@ -7,13 +7,13 @@ use Zipavlin\Redline\Models\Database\Report;
 use Zipavlin\Redline\Models\Database\Screenshot;
 use Zipavlin\Redline\Models\Database\User;
 use Zipavlin\Redline\Models\Database\Video;
-use Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider;
+use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
 beforeEach(function () {
     ensureRedlineDirectories();
     // Purge to get a fresh :memory: connection with clean schema for each test.
     DB::purge('redline');
-    (new DatabaseStorageProvider)->boot();
+    (new StorageProvider)->boot();
 });
 
 // ---------------------------------------------------------------------------

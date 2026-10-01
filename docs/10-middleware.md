@@ -52,9 +52,9 @@ if ($guard->shouldShowWidget(request())) {
 }
 ```
 
-So with the default `EnvironmentGuardProvider` (active when `APP_ENV=staging`)
-and `DatabaseStorageProvider`, the middleware lands on the `web` group and every
-HTML page rendered through it gets the widget. The guard's
+So with the default `EnvironmentGuardProvider` (active when `APP_ENV=staging`),
+the middleware lands on the `web` group and every HTML page rendered through it
+gets the widget. The guard's
 `shouldShowWidget()` is **re-evaluated per request** inside the middleware's
 `handle()`, so a live environment change (or a `REDLINE_GUARD_EXCLUDE` path
 match) immediately stops injection - including when the middleware was added
