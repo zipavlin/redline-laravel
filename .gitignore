@@ -31,3 +31,4 @@ phpstan.neon
 /.codex
 /.opencode
 /.junie
+/.openchamber
