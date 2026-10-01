@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Zipavlin\Redline\Enums\QueryOperator;
@@ -16,6 +17,7 @@ use Zipavlin\Redline\Http\Query\IncludeField;
 use Zipavlin\Redline\Http\Query\QuerySchema;
 use Zipavlin\Redline\Http\Query\ResourceQuery;
 use Zipavlin\Redline\Models\Concerns\HasQuerySchema;
+use Zipavlin\Redline\Support\Members;
 
 abstract class Report extends Model
 {
@@ -87,6 +89,8 @@ abstract class Report extends Model
 
     abstract public function comments(): HasMany;
 
+    abstract public function members(): BelongsToMany;
+
     /**
      * The query grammar whitelist for this resource - see the grammar docblock
      * on QuerySchema for the wire format each entry below enables.
@@ -143,6 +147,18 @@ abstract class Report extends Model
                     relatedSchema: fn () => User::querySchema(),
                     relatedFilters: ['name'],
                 ),
+                // Relation filter over the member pivot: `filter[member]=<uuid>`
+                // -> whereHas on members.id. `:not`/`:not_in` negate the whole
+                // membership predicate (see FilterField::apply()). No
+                // relatedSchema/relatedFilters on purpose - the mechanism cannot reach
+                // an attribute on a model reached THROUGH a pivot, so
+                // `filter[member.name:like]` stays unsupported and 422s on the operator
+                // allowlist instead of silently widening.
+                'member' => new FilterField(
+                    operators: QueryOperator::relation(),
+                    relation: 'members',
+                    relationColumn: 'id',
+                ),
                 // Virtual OR-field: matches the pre-grammar `search` box (body OR location).
                 'search' => new FilterField(
                     operators: [QueryOperator::LIKE],
@@ -161,6 +177,7 @@ abstract class Report extends Model
                         }
                     },
                 ),
+
                 // Relationship existence. `=1`/`true` -> has(), `=0`/`false` -> doesntHave();
                 // anything else 422s rather than silently matching neither (the old
                 // truthy()-only check on has_media/has_comments let a typo'd value fall
@@ -208,6 +225,18 @@ abstract class Report extends Model
                     relation: 'author',
                     attributes: ['id', 'name', 'email'],
                     default: ['id', 'name'],
+                ),
+                'members' => new IncludeField(
+                    relation: 'members',
+                    operators: [QueryOperator::COUNT, QueryOperator::EXISTS],
+                    eagerLoad: ['members:id,name'],
+                    resolver: function (Report $report): ?array {
+                        if (! $report->relationLoaded('members')) {
+                            return null;
+                        }
+
+                        return Members::fromUsers($report->members);
+                    },
                 ),
                 // `url` reads Screenshot::$report_id and $id - both are always
                 // selected regardless of the requested attribute list.

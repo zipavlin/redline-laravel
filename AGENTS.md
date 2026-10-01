@@ -31,7 +31,7 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 ### PHP (Pest)
 ```
-composer test                    # full Pest suite (baseline: 322 passed, 0 skipped; see Test status)
+composer test                    # full Pest suite (baseline: 346 passed, 0 skipped; see Test status)
 composer test-coverage           # Pest + coverage
 composer format                  # pint (Laravel defaults; no pint.json)
 vendor/bin/pest --filter=Report  # single file / group
@@ -47,8 +47,8 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-`vendor/bin/pest` reports **322 passed, 0 skipped (953 assertions)**. There are no
-environment-dependent skips left - the package has a single storage backend.
+`vendor/bin/pest` reports **345 passed, 0 skipped (1034 assertions)**. The package has a
+single storage backend, so there are no environment-dependent skips.
 
 ## Architecture
 
@@ -60,7 +60,7 @@ config and no custom-provider seam.
 
 | Provider | Backing | Notes |
 |---|---|---|
-| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0005_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
+| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0006_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
 
 ### Query grammar - `src/Http/Query/`
 
@@ -76,6 +76,37 @@ reference.
 - `AggregateField` - count/unique/exists with optional `group_by[]`.
 - `ParsedQuery` - immutable result; controllers call `->rows()` / `->aggregate()` /
   `->statusCounts()`.
+
+### Report members - `redline_members` pivot
+
+Many-to-many report ↔ user members live in a plain `belongsToMany` pivot
+(`redline_members`) with **no model of its own** - `Database\Report::members()` points
+at `Database\User`. Migration `0006_create_redline_members_table.php` declares a
+composite primary key `(report_id, user_id)` (the pair's uniqueness) and real foreign
+keys with `CASCADE` (consistent with `0003`–`0005`): `report_id` → `redline_reports.id`
+and `user_id` → `redline_users.id`. Cleanup is therefore delegated to the database:
+`ReportController::destroy()` and `UserController::destroy()` leave members alone, and
+`MemberController::store()` relies on `syncWithoutDetaching` for its additive +
+idempotent behaviour.
+
+Endpoints (inside the protected `RedlineApiAuth` + `RedlineCsrf` group, both gated by
+`Operation::UPDATE` on the report - developer/admin/author):
+
+| Method | Path | Behaviour |
+|---|---|---|
+| POST | `/report/{report}/member` | body `{"user_ids": [...]}`; additive + idempotent (`syncWithoutDetaching`); unknown ids → 422 |
+| DELETE | `/report/{report}/member` | body `{"user_ids": [...]}`; idempotent (`detach`); removes only existing pairs |
+
+Both respond `{ "members": [ { id, name, initials } ] }` - the report's full current
+list, sorted by `name` then `id` (the shared `Support\Members::fromUsers()` projection,
+also used by the read grammar so the two cannot drift).
+
+Read grammar on `Base\Report::querySchema()`: include target `members` (relation
+`members`; bare / `:count` / `:exists` → `members_count`/`members_exists`) and filter
+target `member` (relation operators over `members.id`). `filter[member:not]` /
+`filter[member:not_in]` negate the **whole** membership predicate ("has no such
+member"), not an inner column comparison. `filter[member.name:like]` is **not**
+supported (no `relatedSchema` on that filter) and 422s, as intended.
 
 ### Guard & auth providers (pluggable)
 
@@ -179,7 +210,7 @@ from element attributes.
 - PHP: PSR-4 `Zipavlin\Redline\` → `src/`; tests `Zipavlin\Redline\Tests\` → `tests/`.
 - Linting: Pint (Laravel defaults; no custom `pint.json`).
 - EditorConfig: LF line endings, 4-space indent, UTF-8.
-- Migrations numbered (`0001_`–`0005_`) in `database/redline/`, not timestamped; created
+- Migrations numbered (`0001_`–`0006_`) in `database/redline/`, not timestamped; created
   by `redline:install` for file databases, auto-run for in-memory test DBs.
 - Built IIFE bundles in `public/` **are committed**.
 - Public assets tag: `php artisan vendor:publish --tag=redline-assets` (also

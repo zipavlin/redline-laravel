@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Models\Database\Comment;
@@ -175,4 +176,40 @@ it('comment belongs to author', function () {
 
     expect($loaded->author)->not->toBeNull()
         ->and($loaded->author->name)->toBe('Bob');
+});
+
+// ---------------------------------------------------------------------------
+// Members (report <-> user pivot, no model of its own)
+// ---------------------------------------------------------------------------
+
+it('links reports and users through the member pivot', function () {
+    $user = User::on('redline')->create(['name' => 'Member', 'email' => 'member@example.com', 'role' => 'developer']);
+    $report = Report::on('redline')->create([
+        'url' => 'https://example.com', 'location' => '/', 'status' => 'new',
+    ]);
+
+    $report->members()->attach($user->id);
+
+    $loaded = Report::on('redline')->with('members')->find($report->id);
+
+    expect($loaded->members)->toHaveCount(1)
+        ->and($loaded->members->first()->id)->toBe($user->id)
+        ->and($loaded->members->first()->name)->toBe('Member');
+});
+
+it('enforces one member row per report-user pair', function () {
+    $user = User::on('redline')->create(['name' => 'Member', 'email' => 'unique-member@example.com', 'role' => 'developer']);
+    $report = Report::on('redline')->create([
+        'url' => 'https://example.com', 'location' => '/', 'status' => 'new',
+    ]);
+
+    DB::connection('redline')->table('redline_members')->insert([
+        'report_id' => $report->id,
+        'user_id' => $user->id,
+    ]);
+
+    expect(fn () => DB::connection('redline')->table('redline_members')->insert([
+        'report_id' => $report->id,
+        'user_id' => $user->id,
+    ]))->toThrow(QueryException::class);
 });

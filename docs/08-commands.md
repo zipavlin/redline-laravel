@@ -32,7 +32,7 @@ Running database migrations …
 
 There is one local backend, so there is no choice and nothing to write to `.env`. The command creates `storage/app/redline/database/`, registers an SQLite
 connection named `redline` pointing at `storage/app/redline/database/redline.db`, and
-runs the numbered migrations (`0001`–`0005`) from
+runs the numbered migrations (`0001`–`0006`) from
 `vendor/zipavlin/redline/database/redline` on it.
 
 ### Step 2 - Auth provider

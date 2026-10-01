@@ -36,7 +36,7 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
    php artisan migrate --path=vendor/zipavlin/redline/database/redline --database=redline
    ```
 
-   which executes the package's numbered migrations `0001_`–`0005_` against
+   which executes the package's numbered migrations `0001_`–`0006_` against
    `storage/app/redline/database/redline.db`.
 
 2. **Auth provider** - *"Controls how users register and which roles they can claim."*

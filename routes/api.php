@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Route;
 use Zipavlin\Redline\Http\Controllers\Api\AuthController;
 use Zipavlin\Redline\Http\Controllers\Api\BootstrapController;
 use Zipavlin\Redline\Http\Controllers\Api\CommentController;
+use Zipavlin\Redline\Http\Controllers\Api\MemberController;
 use Zipavlin\Redline\Http\Controllers\Api\ReportController;
 use Zipavlin\Redline\Http\Controllers\Api\ScreenshotController;
 use Zipavlin\Redline\Http\Controllers\Api\UserController;
@@ -81,6 +82,10 @@ Route::prefix(config('redline.path', 'redline').'/api')->middleware(SubstituteBi
         Route::delete('report/{report}', [ReportController::class, 'destroy']);
         Route::post('report/{report}/move', [ReportController::class, 'move']);
         Route::patch('report/{report}/status', [ReportController::class, 'status']);
+
+        // Members
+        Route::post('report/{report}/member', [MemberController::class, 'store']);
+        Route::delete('report/{report}/member', [MemberController::class, 'destroy']);
 
         // Comments
         Route::get('report/{report}/comment', [CommentController::class, 'index']);

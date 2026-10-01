@@ -172,7 +172,7 @@ php artisan redline:remove
 
 Eloquent models on a dedicated SQLite connection at
 `storage/app/redline/database/redline.db`. Requires `pdo_sqlite`. The schema
-(numbered migrations `0001`–`0005`) is created by `php artisan redline:install`.
+(numbered migrations `0001`–`0006`) is created by `php artisan redline:install`.
 
 
 ---
@@ -214,7 +214,7 @@ this repo's `public/` (committed), and published via
 composer test
 ```
 
-Current baseline: **322 passed, 0 skipped** (953 assertions).
+Current baseline: **345 passed, 0 skipped** (1034 assertions).
 
 ---
 

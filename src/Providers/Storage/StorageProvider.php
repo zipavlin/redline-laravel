@@ -105,7 +105,8 @@ class StorageProvider
         $db = config('database.connections.redline.database', '');
 
         if ($db === ':memory:') {
-            if (! Schema::connection('redline')->hasTable('redline_reports')) {
+            if (! Schema::connection('redline')->hasTable('redline_reports')
+                || ! Schema::connection('redline')->hasTable('redline_members')) {
                 $this->runMigrations();
             }
 
@@ -124,6 +125,14 @@ class StorageProvider
         if (! Schema::connection('redline')->hasTable('redline_reports')) {
             throw new \RuntimeException(
                 'Redline database tables not found. Run `php artisan redline:install` to set up the database.'
+            );
+        }
+
+        // An install predating 0006 has reports but not members; surface the
+        // upgrade instead of letting every membership query fail at runtime.
+        if (! Schema::connection('redline')->hasTable('redline_members')) {
+            throw new \RuntimeException(
+                'Redline database is missing the redline_members table. Run `php artisan redline:install` to migrate it.'
             );
         }
     }
