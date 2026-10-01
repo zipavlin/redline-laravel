@@ -14,7 +14,6 @@ use Zipavlin\Redline\Providers\Auth\DomainAuthProvider;
 use Zipavlin\Redline\Providers\Auth\PinAuthProvider;
 use Zipavlin\Redline\Providers\Guard\GuardProvider;
 use Zipavlin\Redline\Providers\Guard\IpGuardProvider;
-use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
 
 class InstallCommand extends Command
@@ -33,7 +32,7 @@ class InstallCommand extends Command
         $this->line('');
 
         // Providers and features
-        $storage = $this->handleStorageProvider();
+        $this->handleStorageProvider();
         $auth = $this->handleAuthProvider();
         $this->handleGuardProvider();
         $this->handleFeatures();
@@ -41,7 +40,7 @@ class InstallCommand extends Command
         // Support
         $this->handleEmailSetup($auth);
         $this->handleAssetsAndConfig();
-        $this->handleFirstUser($storage);
+        $this->handleFirstUser();
 
         return self::SUCCESS;
     }
@@ -49,31 +48,17 @@ class InstallCommand extends Command
     // Handlers
 
     /**
-     * Handles user selection of a storage backend and returns the fully qualified class name of the chosen provider.
+     * Sets up the package's single local storage backend.
      *
-     * @return class-string The fully qualified class name of the selected storage provider.
-     *
-     * @throws BindingResolutionException
+     * The schema is always created - there is no provider choice to make.
      */
-    public function handleStorageProvider(): string
+    public function handleStorageProvider(): void
     {
         // Intro
         $this->line('  <options=bold>Storage provider</>');
         $this->line('  Controls how data is saved.');
 
-        // Prompt the user to select a storage provider
-        $storage = $this->promptProvider(
-            baseClass: StorageProvider::class,
-            directory: __DIR__.'/../Providers/Storage',
-            namespace: 'Zipavlin\\Redline\\Providers\\Storage',
-            question: 'Which storage backend would you like to use?',
-        );
-
-        // Write env
-        $this->writeEnvValue('REDLINE_STORAGE_PROVIDER', $storage);
-        $this->line("  <fg=green>✓</> REDLINE_STORAGE_PROVIDER=$storage");
-
-        // The Database provider is the only backend, so its schema is always created.
+        // There is one backend, so its schema is always created.
         $this->line('  <options=bold>Running database migrations …</>');
 
         $this->configureDatabaseConnection();
@@ -86,8 +71,6 @@ class InstallCommand extends Command
         $this->line('  <fg=green>✓</> Redline database tables created.');
 
         $this->line('');
-
-        return $storage;
     }
 
     /**
@@ -418,19 +401,12 @@ class InstallCommand extends Command
 
     /**
      * Handles the creation of the first admin user and outputs information to the console.
-     *
-     * @param  mixed  $storage  The storage provider configuration to be used for the admin user.
      */
-    private function handleFirstUser(mixed $storage): void
+    private function handleFirstUser(): void
     {
         $this->line('  <options=bold>First admin user</>');
 
         if ($this->confirm('Would you like to create the first admin user?', true)) {
-            // Push the chosen provider into the in-process config: redline:user
-            // resolves config('redline.storage.provider'), which reads bootstrap-time
-            // env - stale when .env was just rewritten by this command.
-            config(['redline.storage.provider' => $storage]);
-
             $this->call('redline:user');
         }
 

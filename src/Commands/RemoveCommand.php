@@ -65,13 +65,6 @@ class RemoveCommand extends Command
     {
         $this->info('Removing storage');
 
-        if (config('redline.storage.provider') === CloudStorageProvider::class) {
-            $this->line('  <fg=yellow>⚠</> Cloud storage - nothing local to delete.');
-            $this->line('  Reports live on the remote Redline API - delete them there.');
-
-            return;
-        }
-
         $path = storage_path('app/'.config('redline.storage.path.base'));
         $resolved = realpath($path);
 

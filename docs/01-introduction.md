@@ -58,7 +58,7 @@ element attributes.
 |---|---|
 | PHP | 8.3 or 8.4 (`^8.3\|^8.4`) |
 | Laravel | 11.x, 12.x, or 13.x |
-| Extension | `pdo_sqlite` (for the default storage backend) |
+| Extension | `pdo_sqlite` (required by the storage backend) |
 
 ## Activation model
 
@@ -78,8 +78,8 @@ The default guard is
 `DebugGuardProvider` (`APP_DEBUG=true`) and `IpGuardProvider`
 (`REDLINE_GUARD_ALLOWED_IPS`, env-only). See [Guards](06-guards.md).
 
-> The dashboard, API routes, and widget injection also require a **local** storage
-> provider. Cloud-backed providers are planned but not yet implemented.
+> The dashboard, API routes, and widget injection are all wired up once the guard
+> is active - there is a single local storage backend and no cloud mode yet.
 
 ## Related repositories
 

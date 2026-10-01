@@ -13,11 +13,11 @@ use Zipavlin\Redline\Models\Database\Report;
 use Zipavlin\Redline\Models\Database\Screenshot;
 use Zipavlin\Redline\Models\Database\User;
 use Zipavlin\Redline\Models\Database\Video;
-use Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider;
+use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
 beforeEach(function () {
     ensureRedlineDirectories();
-    $this->provider = new DatabaseStorageProvider;
+    $this->provider = new StorageProvider;
 });
 
 // ---------------------------------------------------------------------------
@@ -37,12 +37,8 @@ it('register() returns a map of all six model bindings', function () {
 });
 
 // ---------------------------------------------------------------------------
-// isLocal() / apiUrl()
+// apiUrl()
 // ---------------------------------------------------------------------------
-
-it('isLocal() returns true', function () {
-    expect($this->provider->isLocal())->toBeTrue();
-});
 
 it('apiUrl() returns a URL ending with /redline/api', function () {
     expect($this->provider->apiUrl())->toEndWith('/redline/api');

@@ -120,7 +120,6 @@ it('removes storage, published files and REDLINE_* env entries with --force', fu
     // Fake .env mixing REDLINE_* keys with unrelated ones.
     $fs->put($envPath, implode("\n", [
         'APP_NAME=Laravel',
-        'REDLINE_STORAGE_PROVIDER=Zipavlin\\Redline\\Providers\\Storage\\DatabaseStorageProvider',
         'MAIL_MAILER=resend',
         'REDLINE_AUTH_PIN_REPORTER=1234',
         'RESEND_API_KEY=re_abc',
@@ -221,7 +220,6 @@ it('strips REDLINE_* lines and preserves surrounding formatting', function () {
 
     $cleaned = $command->strip(implode("\n", [
         'APP_NAME=Laravel',
-        'REDLINE_STORAGE_PROVIDER=Zipavlin\\Redline\\Providers\\Storage\\DatabaseStorageProvider',
         'MAIL_MAILER=resend',
         'REDLINE_AUTH_PIN_REPORTER=1234',
         'RESEND_API_KEY=re_abc',
@@ -246,6 +244,6 @@ it('strips REDLINE_* lines from CRLF files', function () {
         }
     };
 
-    expect($command->strip("APP_NAME=Laravel\r\nREDLINE_STORAGE_PROVIDER=X\r\nMAIL_MAILER=resend\r\n"))
+    expect($command->strip("APP_NAME=Laravel\r\nREDLINE_AUTH_PROVIDER=X\r\nMAIL_MAILER=resend\r\n"))
         ->toBe("APP_NAME=Laravel\r\nMAIL_MAILER=resend\r\n");
 });

@@ -3,61 +3,158 @@
 namespace Zipavlin\Redline\Providers\Storage;
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schema;
+use Zipavlin\Redline\Models\Base\Assignment;
+use Zipavlin\Redline\Models\Base\Comment;
+use Zipavlin\Redline\Models\Base\Report;
+use Zipavlin\Redline\Models\Base\Screenshot;
+use Zipavlin\Redline\Models\Base\User;
+use Zipavlin\Redline\Models\Base\Video;
+use Zipavlin\Redline\Models\Database\Assignment as DatabaseAssignment;
+use Zipavlin\Redline\Models\Database\Comment as DatabaseComment;
+use Zipavlin\Redline\Models\Database\Report as DatabaseReport;
+use Zipavlin\Redline\Models\Database\Screenshot as DatabaseScreenshot;
+use Zipavlin\Redline\Models\Database\User as DatabaseUser;
+use Zipavlin\Redline\Models\Database\Video as DatabaseVideo;
 
 /**
- * Bootstrap provider for Redline storage backends.
+ * The package's single local storage backend: Eloquent models on a dedicated
+ * SQLite connection, plus uploaded media under `storage/app/{path.base}`.
  *
  * Responsibilities:
- *  - register(): return model binding map (abstract → concrete)
- *  - apiUrl(): return the URL the widget should call
- *  - isLocal(): return false only for CloudStorageProvider
- *  - boot(): iterate register() and bind models in the IoC container
- *  - file system helpers shared by local providers
+ *  - register(): return the model binding map (abstract model → Database implementation)
+ *  - apiUrl(): return the URL the widget calls for the API
+ *  - dashboardUrl(): return the URL the dashboard is served from
+ *  - boot(): ensure directories, configure the `redline` connection, ensure the
+ *    schema exists, then bind the model implementations in the IoC container
+ *  - media helpers shared by the package controllers
  */
-abstract class StorageProvider
+class StorageProvider
 {
     /**
      * Return a map of abstract model class → concrete implementation.
-     * The base boot() method iterates this and calls app()->bind() for each.
+     * boot() iterates this and calls app()->bind() for each entry.
      *
      * @return array<class-string, class-string>
      */
-    abstract public function register(): array;
-
-    /**
-     * The URL the widget uses for all API calls.
-     * Local providers return the host app URL; CloudStorageProvider returns the remote URL.
-     */
-    abstract public function apiUrl(): string;
-
-    /**
-     * The URL the widget uses for dashboard access.
-     * Local providers return the host app URL; CloudStorageProvider returns the remote URL.
-     */
-    abstract public function dashboardUrl(): string;
-
-    /**
-     * Whether local routes and storage are active.
-     * Returns false only for CloudStorageProvider - skips route registration.
-     */
-    public function isLocal(): bool
+    public function register(): array
     {
-        return true;
+        return [
+            User::class => DatabaseUser::class,
+            Report::class => DatabaseReport::class,
+            Screenshot::class => DatabaseScreenshot::class,
+            Video::class => DatabaseVideo::class,
+            Comment::class => DatabaseComment::class,
+            Assignment::class => DatabaseAssignment::class,
+        ];
     }
 
     /**
-     * Bind all models returned by register() into the IoC container.
+     * The URL the widget uses for all API calls.
+     */
+    public function apiUrl(): string
+    {
+        return url('/redline/api');
+    }
+
+    /**
+     * The URL the widget uses for dashboard access.
+     */
+    public function dashboardUrl(): string
+    {
+        return url('/redline');
+    }
+
+    /**
+     * Prepare the local storage backend and bind its models.
      * Called by RedlineServiceProvider during boot.
      */
     public function boot(): void
     {
+        $this->ensureDirectories();
+        $this->configureConnection();
+        $this->ensureSchema();
+
         foreach ($this->register() as $abstract => $concrete) {
             app()->bind($abstract, $concrete);
         }
     }
 
     // -----------------------------------------------------------------------
-    // File system helpers - available to local providers
+    // Private setup helpers
+    // -----------------------------------------------------------------------
+
+    private function configureConnection(): void
+    {
+        // Don't overwrite if already configured - lets tests inject ':memory:'.
+        if (config('database.connections.redline') !== null) {
+            return;
+        }
+
+        config(['database.connections.redline' => [
+            'driver' => 'sqlite',
+            'database' => $this->databasePath().DIRECTORY_SEPARATOR.'redline.db',
+            'foreign_key_constraints' => true,
+        ]]);
+    }
+
+    /**
+     * Create schema automatically for in-memory databases (testing).
+     * For file-based databases, tables must exist (created by redline:install).
+     */
+    private function ensureSchema(): void
+    {
+        $db = config('database.connections.redline.database', '');
+
+        if ($db === ':memory:') {
+            if (! Schema::connection('redline')->hasTable('redline_reports')
+                || ! Schema::connection('redline')->hasTable('redline_assignments')) {
+                $this->runMigrations();
+            }
+
+            return;
+        }
+
+        // The SQLite connector throws a cryptic "Database file does not exist"
+        // QueryException when the file is missing; fail with the install hint
+        // instead. redline:install creates the file - never this boot.
+        if (! file_exists($db)) {
+            throw new \RuntimeException(
+                'Redline database not found at ['.$db.']. Run `php artisan redline:install` to set up the database.'
+            );
+        }
+
+        if (! Schema::connection('redline')->hasTable('redline_reports')) {
+            throw new \RuntimeException(
+                'Redline database tables not found. Run `php artisan redline:install` to set up the database.'
+            );
+        }
+
+        // An install predating 0006 has reports but not assignments; surface the
+        // upgrade instead of letting every assignment query fail at runtime.
+        if (! Schema::connection('redline')->hasTable('redline_assignments')) {
+            throw new \RuntimeException(
+                'Redline database is missing the redline_assignments table. Run `php artisan redline:install` to migrate it.'
+            );
+        }
+    }
+
+    /**
+     * Run the package migration files against the redline connection.
+     * Used only for in-memory (test) databases - production uses artisan migrate.
+     */
+    private function runMigrations(): void
+    {
+        Artisan::call('migrate', [
+            '--path' => realpath(__DIR__.'/../../../database/redline'),
+            '--database' => 'redline',
+            '--realpath' => true,
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // File system helpers
     // -----------------------------------------------------------------------
 
     public function mediaPath(): string
@@ -81,7 +178,7 @@ abstract class StorageProvider
     }
 
     // -----------------------------------------------------------------------
-    // File system handlers - available to local providers
+    // File system handlers
     // -----------------------------------------------------------------------
 
     public function storeScreenshot(UploadedFile $file, string $id): string

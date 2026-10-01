@@ -47,18 +47,20 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-`vendor/bin/pest` reports **346 passed, 0 skipped (1040 assertions)**. The package has a
+`vendor/bin/pest` reports **345 passed, 0 skipped (1034 assertions)**. The package has a
 single storage backend, so there are no environment-dependent skips.
 
 ## Architecture
 
-### Storage providers - `src/Providers/Storage/`
+### Storage - `src/Providers/Storage/`
 
-Configured via `REDLINE_STORAGE_PROVIDER` / `config('redline.storage.provider')`.
+The package has a single local storage backend: a concrete `StorageProvider`
+(Eloquent models on a dedicated SQLite connection). There is no multi-provider
+config and no custom-provider seam.
 
 | Provider | Backing | Notes |
 |---|---|---|
-| `DatabaseStorageProvider` (default) | Eloquent + own SQLite connection at `storage/app/redline/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0006_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
+| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0006_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
 
 ### Query grammar - `src/Http/Query/`
 
@@ -181,9 +183,9 @@ from element attributes.
 
 ### Artisan commands (only these exist)
 
-- `redline:install` - interactive setup (storage, auth provider, email, disabled
-  features, writes `.env`, publishes config+assets; for `DatabaseStorageProvider` it also
-  creates the schema).
+- `redline:install` - interactive setup (auth provider, email, disabled
+  features, writes `.env`, publishes config+assets; it also creates the SQLite
+  schema).
 - `redline:user` - admin create/grant.
 - `redline:remove` - wipe all redline data, removes redline from the project.
 
@@ -208,7 +210,7 @@ from element attributes.
 - PHP: PSR-4 `Zipavlin\Redline\` → `src/`; tests `Zipavlin\Redline\Tests\` → `tests/`.
 - Linting: Pint (Laravel defaults; no custom `pint.json`).
 - EditorConfig: LF line endings, 4-space indent, UTF-8.
-- Migrations numbered (`0001_`–`0005_`) in `database/redline/`, not timestamped; created
+- Migrations numbered (`0001_`–`0006_`) in `database/redline/`, not timestamped; created
   by `redline:install` for file databases, auto-run for in-memory test DBs.
 - Built IIFE bundles in `public/` **are committed**.
 - Public assets tag: `php artisan vendor:publish --tag=redline-assets` (also

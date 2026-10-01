@@ -39,13 +39,6 @@ class RedlineServiceProvider extends ServiceProvider
                 return new $class;
             });
 
-            $this->app->singleton(StorageProvider::class, function () {
-                /** @var class-string<StorageProvider> $class */
-                $class = config('redline.storage.provider');
-
-                return new $class;
-            });
-
             $this->app->singleton(AuthProvider::class, function () {
                 /** @var class-string<AuthProvider> $class */
                 $class = config('redline.auth.provider');
@@ -112,34 +105,26 @@ class RedlineServiceProvider extends ServiceProvider
             /** @var GuardProvider $guard */
             $guard = $this->app->make(GuardProvider::class);
 
-            /** @var StorageProvider $storage */
-            $storage = $this->app->make(StorageProvider::class);
-
             if (! $guard->shouldLoadMiddleware(request())) {
                 return;
             }
 
-            // API routes are available for local providers only when the guard
+            /** @var StorageProvider $storage */
+            $storage = $this->app->make(StorageProvider::class);
+
+            // API routes and the dashboard shell are available once the guard
             // says the package should wire up its middleware at boot.
-            if ($storage->isLocal() && $guard->shouldLoadMiddleware(request())) {
-                $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
-            }
+            $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
+            $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
 
             // Load view files
             $this->loadViewsFrom(__DIR__.'/../resources/views', 'redline');
 
             // Widget injection
-            if ($guard->shouldLoadMiddleware(request())) {
-                $this->callAfterResolving(Kernel::class, function (Kernel $kernel): void {
-                    /** @var \Illuminate\Foundation\Http\Kernel $kernel */
-                    $kernel->appendMiddlewareToGroup('web', ShowRedlineWidget::class);
-                });
-            }
-
-            // Dashboard is available for local providers only.
-            if ($storage->isLocal() && $guard->shouldLoadMiddleware(request())) {
-                $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
-            }
+            $this->callAfterResolving(Kernel::class, function (Kernel $kernel): void {
+                /** @var \Illuminate\Foundation\Http\Kernel $kernel */
+                $kernel->appendMiddlewareToGroup('web', ShowRedlineWidget::class);
+            });
 
             // Bind model implementations into the IoC container.
             $storage->boot();
@@ -213,19 +198,6 @@ class RedlineServiceProvider extends ServiceProvider
     public static function composer(): Composer
     {
         return new Composer(app()->make(Filesystem::class), base_path());
-    }
-
-    public static function getStorageProvider(): ?string
-    {
-        return config('redline.storage.provider');
-    }
-
-    /**
-     * @throws BindingResolutionException
-     */
-    public static function makeStorageProvider(): StorageProvider
-    {
-        return app(static::getStorageProvider());
     }
 
     public static function getAuthProvider(): ?string

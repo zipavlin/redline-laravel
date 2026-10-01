@@ -15,31 +15,25 @@ Each invocation reads the current `.env` / published config at runtime, so whate
 
 ## redline:install
 
-`php artisan redline:install` walks you through the whole setup interactively: storage backend,
-auth provider, guard provider, disabled features, email, publishing, database schema, and the
+`php artisan redline:install` walks you through the whole setup interactively: auth
+provider, guard provider, disabled features, email, publishing, database schema, and the
 first admin user. Every choice is written to `.env` as a `REDLINE_*` (or `MAIL_*`) variable, so a
 rerun is safe - existing values are updated in place, and the command can be re-run after switching
 providers.
 
-### Step 1 - Storage provider
+### Step 1 - Storage
 
 ```
 Storage provider
 Controls how data is saved.
-Which storage backend would you like to use? [Database ...]
+Running database migrations …
+✓ Redline database tables created.
 ```
 
-Writes `REDLINE_STORAGE_PROVIDER` with the selected provider's FQCN.
-
-- **Database** (default) - `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider`. The
-  command creates `storage/app/redline/database/`, registers an SQLite connection named `redline`
-  pointing at `storage/app/redline/database/redline.db`, and runs the numbered migrations
-  (`0001`–`0005`) from `vendor/zipavlin/redline/database/redline` on it:
-
-  ```
-  Running database migrations …
-  ✓ Redline database tables created.
-  ```
+There is one local backend, so there is no choice and nothing to write to `.env`. The command creates `storage/app/redline/database/`, registers an SQLite
+connection named `redline` pointing at `storage/app/redline/database/redline.db`, and
+runs the numbered migrations (`0001`–`0006`) from
+`vendor/zipavlin/redline/database/redline` on it.
 
 ### Step 2 - Auth provider
 
@@ -145,7 +139,6 @@ Next steps:
 
 | Variable | Written when | Purpose |
 |---|---|---|
-| `REDLINE_STORAGE_PROVIDER` | always | Storage provider FQCN |
 | `REDLINE_AUTH_PROVIDER` | always | Auth provider FQCN |
 | `REDLINE_GUARD_PROVIDER` | always | Guard provider FQCN |
 | `REDLINE_AUTH_PIN_REPORTER` | Pin auth, PIN given | Reporter registration PIN |
@@ -156,8 +149,8 @@ Next steps:
 | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | Resend or SMTP chosen | Mail transport |
 | `RESEND_API_KEY` | Resend chosen, key given | Resend API key |
 
-It also publishes the selected config/assets and, for the Database backend, creates the Redline
-schema on the `redline` SQLite connection.
+It also publishes the selected config/assets and creates the Redline SQLite schema on the
+`redline` connection.
 
 ## redline:user
 
@@ -183,9 +176,8 @@ Rules enforced by the command:
   *looser* than the 8-character minimum enforced by the register/reset flows in the API.
 - Role defaults to **admin**; the other options are `reporter` and `developer`.
 
-The storage provider is booted first; if it cannot boot (e.g. the SQLite schema is missing for
-`DatabaseStorageProvider`), the command fails with the provider's message - run
-`redline:install` first.
+The storage provider is booted first; if it cannot boot (e.g. the SQLite schema is missing), the
+command fails with the provider's message - run `redline:install` first.
 
 ## redline:remove --force
 
@@ -212,8 +204,7 @@ Please write 'staging' to continue:
 
 1. **Storage** - the whole `storage/app/redline` directory (from
    `REDLINE_STORAGE_PATH_BASE`). It refuses to delete anything that does not resolve inside
-   `storage/app`. For the cloud storage provider there is nothing local to delete - reports live
-   on the remote Redline API and are deleted there.
+   `storage/app`.
 2. **Assets** - the published `public/vendor/redline` directory.
 3. **Config** - `config/redline.php` and any published mail views under
    `resources/views/vendor/redline`.
