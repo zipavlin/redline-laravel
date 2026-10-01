@@ -4,7 +4,6 @@ namespace Zipavlin\Redline\Tests;
 
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
-use Orbit\OrbitServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 use Zipavlin\Redline\Http\Middleware\ShowRedlineWidget;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
@@ -74,14 +73,9 @@ class TestCase extends Orchestra
 
     protected function getPackageProviders($app): array
     {
-        return array_values(array_filter([
+        return [
             RedlineServiceProvider::class,
-            // Orbit's own provider wires its config + the `orbit`/`orbit_meta`
-            // connections, which FileStorageProvider's models depend on. A real
-            // host app gets this via composer auto-discovery; testbench does not,
-            // so mirror it here when the package is installed (it is optional).
-            class_exists(OrbitServiceProvider::class) ? OrbitServiceProvider::class : null,
-        ]));
+        ];
     }
 
     public function getEnvironmentSetUp($app): void

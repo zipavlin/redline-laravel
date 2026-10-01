@@ -9,8 +9,7 @@ This package - **`zipavlin/redline`** - is the Laravel backend/API provider for 
 It is not a standalone application: it installs into a host Laravel app and contributes:
 
 - **Storage** - reports, users, comments, and attachments persist in your own storage:
-  an SQLite database by default (the package's own Eloquent connection), with an
-  optional JSON-file provider.
+  an SQLite database (the package's own Eloquent connection).
 - **Authentication** - JWT-based auth (HS256, signed with `app.key`), delivered as an
   HttpOnly `redline_token` cookie, with double-submit CSRF protection for state-changing
   requests.
@@ -60,7 +59,6 @@ element attributes.
 | PHP | 8.3 or 8.4 (`^8.3\|^8.4`) |
 | Laravel | 11.x, 12.x, or 13.x |
 | Extension | `pdo_sqlite` (for the default storage backend) |
-| Optional | `ryangjchandler/orbit` - Laravel 12+ only; required solely for `FileStorageProvider` |
 
 ## Activation model
 

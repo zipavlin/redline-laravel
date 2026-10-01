@@ -8,9 +8,8 @@ namespace Zipavlin\Redline\Http\Query;
  * A resource's whitelist for the Redline query grammar - what ResourceQuery
  * validates incoming filter[]/include[]/sort[]/paginate[]/aggregate[] params
  * against, and what it's allowed to execute. Declared once per resource (see
- * Report::querySchema()) so both storage drivers (Eloquent and Orbit) share
- * it - see tests/Models/FileDriverGrammarTest.php - and so docs/api.md can
- * be generated from it rather than hand-maintained.
+ * Report::querySchema()) and reused for docs/api.md generation rather than
+ * hand-maintained.
  *
  * Every collection endpoint accepts the same parameter groups. The shape is always
  * `<group>[<target>[:<operator>]]=<value>`, where `<target>` is an attribute, a

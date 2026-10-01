@@ -12,7 +12,6 @@ use Zipavlin\Redline\Enums\QueryCapability;
 use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Mail\RegistrationApprovedMail;
 use Zipavlin\Redline\Mail\UserInvitationMail;
-use Zipavlin\Redline\Models\Base\Assignment;
 use Zipavlin\Redline\Models\Base\User;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
@@ -204,10 +203,6 @@ class UserController extends Controller
         if ($this->isLastAdmin($model)) {
             abort(422, 'Cannot delete the last remaining admin.');
         }
-
-        // Per-model delete so the Orbit/File driver also removes each junction's
-        // JSON file - a query-builder mass delete skips those model events.
-        $model->assignments()->get()->each(fn (Assignment $assignment) => $assignment->delete());
 
         $model->delete();
 

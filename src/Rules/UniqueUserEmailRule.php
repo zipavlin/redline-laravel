@@ -7,12 +7,11 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Zipavlin\Redline\Models\Base\User;
 
 /**
- * Storage-agnostic email uniqueness check.
+ * Email uniqueness check scoped to the bound User model.
  *
- * The `unique:` Rule binds to a concrete database connection and table, which
- * breaks under FileStorageProvider (Orbit-backed models). Querying the bound
- * User model instead works for both the Database (SQLite) and File (Orbit)
- * drivers. Pass the id of the row being updated to ignore itself.
+ * Querying the model rather than using the `unique:` rule keeps the check on
+ * the model's own storage binding instead of hard-coding a database connection
+ * and table. Pass the id of the row being updated to ignore itself.
  */
 class UniqueUserEmailRule implements ValidationRule
 {

@@ -29,7 +29,6 @@ return [
         // REDLINE_STORAGE_PROVIDER explicitly to switch; there is no automatic fallback).
         // Options:
         //   DatabaseStorageProvider  - Eloquent + own SQLite (default; requires pdo_sqlite)
-        //   FileStorageProvider      - JSON files via orbit (requires Laravel 12+ and ryangjchandler/orbit)
         //   CloudStorageProvider     - widget points to a remote Redline API; no local storage
         'provider' => env('REDLINE_STORAGE_PROVIDER', DatabaseStorageProvider::class),
 

@@ -97,10 +97,9 @@ class LaravelAuthProvider extends AuthProvider implements Listable
     /**
      * Look up the redline user for a normalized email.
      *
-     * The exact-match query hits first; the fallback fetch-and-compare is portable
-     * across SQLite's byte-exact comparison AND Orbit's schemaless JSON driver (no
-     * whereRaw, no reliance on LIKE). Redline user counts are small, so a bounded
-     * fetch is acceptable.
+     * The exact-match query hits first; the fallback fetch-and-compare covers
+     * rows stored with different casing (SQLite compares bytes, not case).
+     * Redline user counts are small, so a bounded fetch is acceptable.
      */
     private function findByEmail(string $email): ?User
     {
@@ -121,8 +120,7 @@ class LaravelAuthProvider extends AuthProvider implements Listable
      * ever mint a reporter - developers/admins are assigned in redline itself.
      *
      * createOrFirst absorbs the race between two concurrent first exchanges: the
-     * unique index makes the loser refetch instead of throwing. Under Orbit (no
-     * unique index) it degrades to a plain create, which is the existing behavior.
+     * unique index makes the loser refetch instead of throwing.
      */
     protected function provisionUser(object $laravel, string $email): User
     {

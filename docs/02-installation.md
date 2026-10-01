@@ -9,7 +9,6 @@ Redline is a Composer package that installs into an existing Laravel application
 | PHP | `^8.3` or `^8.4` |
 | Laravel | 11.x, 12.x or 13.x (`illuminate/contracts` + `illuminate/database` `^11.0\|\|^12.0\|\|^13.0`) |
 | SQLite driver | `pdo_sqlite` - required by the default `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` |
-| Optional | `ryangjchandler/orbit` (Laravel 12+ only) - required by `Zipavlin\Redline\Providers\Storage\FileStorageProvider` |
 
 ## Composer install
 
@@ -29,7 +28,6 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
 
 1. **Storage provider** - *"Controls how data is saved."*
    - `Database (SQLite - recommended)` → `Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider` (default selection)
-   - `File (JSON files via ryangjchandler/orbit)` → `Zipavlin\Redline\Providers\Storage\FileStorageProvider`
 
    Writes `REDLINE_STORAGE_PROVIDER`.
 
@@ -40,8 +38,6 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
    ```
 
    which executes the package's numbered migrations `0001_`–`0005_` against `storage/app/redline/database/redline.db`.
-
-   For the **File** provider, if `ryangjchandler/orbit` is not installed, you are offered `composer require ryangjchandler/orbit` (default: No). If you accept, the command installs it and asks you to **rerun `redline:install`**; if you decline, the rest of the setup continues and the first-admin step is skipped (see below).
 
 2. **Auth provider** - *"Controls how users register and which roles they can claim."*
 
@@ -83,7 +79,7 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
    - *"Publish Redline config? This is not needed - you can set Redline in .env"* (default: **No**) - runs `vendor:publish --tag=redline-config`, overwriting only after a second confirmation if `config/redline.php` already exists.
    - *"Publish Redline assets to public/vendor/redline/?"* (default: **Yes**) - runs `vendor:publish --tag=redline-assets`.
 
-7. **First admin user** - *"Would you like to create the first admin user?"* (default: **Yes**) - runs `php artisan redline:user` (password minimum 6 characters). Skipped with a hint to run `composer require ryangjchandler/orbit && php artisan redline:user` when File storage was chosen without orbit installed.
+7. **First admin user** - *"Would you like to create the first admin user?"* (default: **Yes**) - runs `php artisan redline:user` (password minimum 6 characters).
 
 8. **Done** - prints next steps: set `APP_ENV=staging` (and `APP_DEBUG=true`) on the staging server, deploy, and visit `/redline/dashboard` to review reports.
 
@@ -117,16 +113,6 @@ These three tags are available in **every** environment - they are not gated by 
 
 > For the **Database** provider, the schema is **not** created automatically at runtime - the installer runs the migrations for you. If you configured storage manually and the tables are missing, the storage layer throws a `RuntimeException` telling you to run `php artisan redline:install`.
 
-## Optional file storage
-
-The `Zipavlin\Redline\Providers\Storage\FileStorageProvider` keeps reports in JSON files via Orbit instead of SQLite. It requires **Laravel 12+** and the `ryangjchandler/orbit` package, which is listed as `suggest` in `composer.json` (installed separately, or let `redline:install` install it for you):
-
-```bash
-composer require ryangjchandler/orbit
-```
-
-See [04-storage.md](04-storage.md) for the trade-offs between the two backends.
-
 ## Post-install checklist
 
 - **Ignore the data directory** - add `storage/app/redline/` to `.gitignore` so report data, uploaded files and the SQLite database never reach the repository.
@@ -147,9 +133,8 @@ php artisan redline:remove
 2. **Removes published assets** - `public/vendor/redline/`.
 3. **Removes published config and mail views** - `config/redline.php` and `resources/views/vendor/redline/`.
 4. **Strips `REDLINE_*` entries** from `.env`.
-5. **Offers to remove the Orbit cache** - only when File storage + Orbit are in use.
-6. **Scans for manual clean-ups** - searches your project's `*.php` files (excluding `vendor`, `node_modules`, `storage`, `bootstrap/cache`) for `ShowRedlineWidget`, `Zipavlin\Redline` and `RedlineServiceProvider` references and lists each match for you to remove by hand (e.g. a manually registered provider in `bootstrap/providers.php`).
-7. **Optionally removes the package** - asks whether to run `composer remove zipavlin/redline`; with `--force` the prompt is skipped and the package is removed automatically. If the automatic removal fails it prints the manual `composer remove` command.
+5. **Scans for manual clean-ups** - searches your project's `*.php` files (excluding `vendor`, `node_modules`, `storage`, `bootstrap/cache`) for `ShowRedlineWidget`, `Zipavlin\Redline` and `RedlineServiceProvider` references and lists each match for you to remove by hand (e.g. a manually registered provider in `bootstrap/providers.php`).
+6. **Optionally removes the package** - asks whether to run `composer remove zipavlin/redline`; with `--force` the prompt is skipped and the package is removed automatically. If the automatic removal fails it prints the manual `composer remove` command.
 
 After it finishes, check your app boots cleanly without the package.
 
@@ -157,7 +142,7 @@ After it finishes, check your app boots cleanly without the package.
 
 - [01-introduction.md](01-introduction.md) - what Redline is and how it fits together
 - [03-configuration.md](03-configuration.md) - every environment variable and config key
-- [04-storage.md](04-storage.md) - storage backends (SQLite vs. file)
+- [04-storage.md](04-storage.md) - storage backend (SQLite)
 - [05-authentication.md](05-authentication.md) - auth providers, JWT, CSRF
 - [06-guards.md](06-guards.md) - when the widget and API are active
 - [08-commands.md](08-commands.md) - all artisan commands

@@ -25,9 +25,6 @@
         "illuminate/contracts": "^11.0||^12.0||^13.0",
         "illuminate/database": "^11.0||^12.0||^13.0"
     },
-    "suggest": {
-        "ryangjchandler/orbit": "Required for FileStorageProvider (Laravel 12+ only)."
-    },
     "require-dev": {
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.14",
@@ -35,8 +32,7 @@
         "orchestra/testbench": "^9.0||^10.0||^11.0",
         "pestphp/pest": "^4.0",
         "pestphp/pest-plugin-arch": "^4.0",
-        "pestphp/pest-plugin-laravel": "^4.0",
-        "ryangjchandler/orbit": "^1.4"
+        "pestphp/pest-plugin-laravel": "^4.0"
     },
     "autoload": {
         "psr-4": {

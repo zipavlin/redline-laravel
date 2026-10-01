@@ -1,8 +1,8 @@
 # Storage
 
 Redline persists reports, users, comments and media through a pluggable storage
-provider. The provider decides where data lives (a SQLite database or JSON flat
-files) and is selected with a single environment variable.
+provider. The provider decides where data lives and is selected with a single
+environment variable.
 
 ## Choosing a provider
 
@@ -19,13 +19,10 @@ The active provider is `config('redline.storage.provider')`, set from
 
 `php artisan redline:install` handles the wiring for you:
 
-1. It prompts for a backend, offering only provider classes that actually exist
-   (currently Database and File).
+1. It prompts for a backend, offering only provider classes that actually exist.
 2. It writes `REDLINE_STORAGE_PROVIDER=<FQCN>` into the host app's `.env`.
 3. For `DatabaseStorageProvider` it configures the `redline` connection and runs
    the package migrations.
-4. For `FileStorageProvider` it checks for `ryangjchandler/orbit` and offers to
-   install it if missing (see below).
 
 ## Database storage (default)
 
@@ -75,32 +72,6 @@ is already configured (the test suite injects `:memory:` this way).
 
 - PHP `pdo_sqlite` extension (the connection driver is `sqlite`).
 
-## File storage (Orbit)
-
-`Zipavlin\Redline\Providers\Storage\FileStorageProvider` - JSON flatfile storage via
-[`ryangjchandler/orbit`](https://github.com/ryangjchandler/orbit). Model data
-(reports, users, comments, …) is written as JSON under
-`storage/app/redline/database/<model>/`; media binaries still go to the
-`screenshots`/`videos` directories.
-
-- Requires **Laravel 12+**.
-- Install the optional dependency with:
-
-  ```bash
-  composer require ryangjchandler/orbit
-  ```
-
-- Orbit availability is detected at runtime via
-  `trait_exists('Orbit\Concerns\Orbital')` - not by composer metadata, because
-  orbit may be a transitive dependency or declared-but-uninstalled.
-- **When orbit is absent**: selecting this provider throws at boot:
-
-  > `RuntimeException: FileStorageProvider requires ryangjchandler/orbit. Run: composer require ryangjchandler/orbit`
-
-  The Orbit model classes also self-guard (they bail out at load time), and
-  `redline:install` warns and offers to install the package when you pick File
-  storage without it.
-
 ## Storage layout
 
 All local files live under `storage/app/{path.base}`. The four path keys under
@@ -111,7 +82,7 @@ All local files live under `storage/app/{path.base}`. The four path keys under
 | `REDLINE_STORAGE_PATH_BASE` | `redline` | Root directory under `storage/app/` |
 | `REDLINE_STORAGE_PATH_SCREENSHOTS` | `screenshots` | Uploaded PNG screenshots |
 | `REDLINE_STORAGE_PATH_VIDEOS` | `videos` | Uploaded video files |
-| `REDLINE_STORAGE_PATH_DATABASE` | `database` | SQLite file (Database provider) or JSON model dirs (File provider) |
+| `REDLINE_STORAGE_PATH_DATABASE` | `database` | SQLite database file |
 
 Default resulting tree:
 
@@ -120,8 +91,7 @@ storage/app/redline/
 ├── screenshots/          # {ordered-uuid}.png
 ├── videos/               # {uuid}.{mp4|webm}
 └── database/
-    ├── redline.db        # DatabaseStorageProvider
-    └── reports/ users/ … # FileStorageProvider (Orbit JSON)
+    └── redline.db        # DatabaseStorageProvider
 ```
 
 The directories are created automatically by the provider's `boot()`.
@@ -166,8 +136,8 @@ Deleting a report also deletes its screenshot/video files from disk.
   to `.gitignore`. It contains the SQLite database (which includes user accounts
   with password hashes) and user-submitted media.
 - **Backup**: back up the whole `storage/app/redline/` directory - the database
-  file (or Orbit JSON dirs) plus `screenshots/` and `videos/`. Restoring the
-  directory restores both data and media, so database and files stay in sync.
+  file plus `screenshots/` and `videos/`. Restoring the directory restores both
+  data and media, so database and files stay in sync.
 - With a future cloud provider there is nothing local to back up; media and data
   would live on the remote API.
 

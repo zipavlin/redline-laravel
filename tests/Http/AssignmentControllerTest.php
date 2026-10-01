@@ -233,7 +233,7 @@ it('rejects filter[assignee.name:like] with 422 - no nested delegation through t
 });
 
 // ---------------------------------------------------------------------------
-// Cleanup - per-model delete on both parent deletions
+// Cleanup - FK cascade on both parent deletions
 // ---------------------------------------------------------------------------
 
 it('removes a report assignments when the report is deleted', function () {

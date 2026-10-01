@@ -208,21 +208,6 @@ class RedlineServiceProvider extends ServiceProvider
     }
 
     /**
-     * Whether the Orbit package is actually usable, i.e. its Orbital trait is
-     * autoloadable (FileStorageProvider's models all `use Orbital`).
-     *
-     * Checked via trait autoloading rather than a composer.json declaration
-     * because the declaration can lie both ways: orbit may be a transitive
-     * dependency (usable but undeclared) or declared but never installed
-     * (unusable). It also keeps the check independent of base_path(), which
-     * points at the testbench skeleton rather than the package root in tests.
-     */
-    public static function orbitConfigured(): bool
-    {
-        return trait_exists('Orbit\Concerns\Orbital');
-    }
-
-    /**
      * @throws BindingResolutionException
      */
     public static function composer(): Composer

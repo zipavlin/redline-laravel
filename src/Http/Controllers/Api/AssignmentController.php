@@ -2,9 +2,9 @@
 
 namespace Zipavlin\Redline\Http\Controllers\Api;
 
-use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Zipavlin\Redline\Enums\Operation;
 use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Models\Base\Assignment;
@@ -35,21 +35,18 @@ class AssignmentController extends Controller
         $userIds = $this->validatedUserIds($request);
         $this->assertUsersExist($userIds);
 
-        foreach ($userIds as $userId) {
-            try {
-                app(Assignment::class)->firstOrCreate([
-                    'report_id' => $report->id,
-                    'user_id' => $userId,
-                ]);
-            } catch (QueryException $e) {
-                // unique(report_id,user_id) lost a race with a concurrent POST - the
-                // pair now exists, which is the idempotent outcome store() promises.
-                // Re-throw anything else rather than masking a real failure.
-                if (! app(Assignment::class)->where('report_id', $report->id)->where('user_id', $userId)->exists()) {
-                    throw $e;
-                }
-            }
-        }
+        $assignmentRows = array_map(fn (string $userId): array => [
+            'id' => (string) Str::uuid7(),
+            'report_id' => $report->id,
+            'user_id' => $userId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $userIds);
+
+        // The unique(report_id, user_id) index makes this additive and
+        // idempotent in one statement: existing pairs are ignored, and a
+        // concurrent POST that wins the race is ignored the same way.
+        app(Assignment::class)->insertOrIgnore($assignmentRows);
 
         return response()->json(['assignees' => $this->assigneeRows($report)]);
     }
@@ -65,14 +62,10 @@ class AssignmentController extends Controller
 
         $userIds = $this->validatedUserIds($request);
 
-        // Per-model delete, never a query-builder mass delete: the Orbit/File
-        // driver removes each junction's JSON file through model events, which a
-        // mass delete skips - leaving orphaned files that reappear on next boot.
         app(Assignment::class)
             ->where('report_id', $report->id)
             ->whereIn('user_id', $userIds)
-            ->get()
-            ->each(fn (Assignment $assignment) => $assignment->delete());
+            ->delete();
 
         return response()->json(['assignees' => $this->assigneeRows($report)]);
     }

@@ -14,8 +14,6 @@ use Zipavlin\Redline\Providers\Auth\DomainAuthProvider;
 use Zipavlin\Redline\Providers\Auth\PinAuthProvider;
 use Zipavlin\Redline\Providers\Guard\GuardProvider;
 use Zipavlin\Redline\Providers\Guard\IpGuardProvider;
-use Zipavlin\Redline\Providers\Storage\DatabaseStorageProvider;
-use Zipavlin\Redline\Providers\Storage\FileStorageProvider;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
 
@@ -75,27 +73,17 @@ class InstallCommand extends Command
         $this->writeEnvValue('REDLINE_STORAGE_PROVIDER', $storage);
         $this->line("  <fg=green>✓</> REDLINE_STORAGE_PROVIDER=$storage");
 
-        // Prompt user to install orbit if necessary
-        if ($storage === FileStorageProvider::class && ! RedlineServiceProvider::orbitConfigured()) {
-            $this->line('  <fg=yellow>⚠</> ryangjchandler/orbit is not installed.');
-            if ($this->confirm('Would you like to install ryangjchandler/orbit now?', false)) {
-                $this->composerInstall('ryangjchandler/orbit');
-                $this->line('  <fg=red>⚠</> please run artisan redline:install again');
-            }
-        }
-        // Migrate database if necessary
-        elseif ($storage === DatabaseStorageProvider::class) {
-            $this->line('  <options=bold>Running database migrations …</>');
+        // The Database provider is the only backend, so its schema is always created.
+        $this->line('  <options=bold>Running database migrations …</>');
 
-            $this->configureDatabaseConnection();
+        $this->configureDatabaseConnection();
 
-            $this->call('migrate', [
-                '--path' => 'vendor/zipavlin/redline/database/redline',
-                '--database' => 'redline',
-            ]);
+        $this->call('migrate', [
+            '--path' => 'vendor/zipavlin/redline/database/redline',
+            '--database' => 'redline',
+        ]);
 
-            $this->line('  <fg=green>✓</> Redline database tables created.');
-        }
+        $this->line('  <fg=green>✓</> Redline database tables created.');
 
         $this->line('');
 
@@ -437,13 +425,10 @@ class InstallCommand extends Command
     {
         $this->line('  <options=bold>First admin user</>');
 
-        if ($storage === FileStorageProvider::class && ! RedlineServiceProvider::orbitConfigured()) {
-            $this->line('  <fg=yellow>⚠</> Skipping admin user creation - install orbit first, then run: <options=bold>composer require ryangjchandler/orbit && php artisan redline:user</>');
-        } elseif ($this->confirm('Would you like to create the first admin user?', true)) {
+        if ($this->confirm('Would you like to create the first admin user?', true)) {
             // Push the chosen provider into the in-process config: redline:user
             // resolves config('redline.storage.provider'), which reads bootstrap-time
-            // env - stale when .env was just rewritten by this command (e.g. a rerun
-            // switching from File to Database would otherwise still boot the old one).
+            // env - stale when .env was just rewritten by this command.
             config(['redline.storage.provider' => $storage]);
 
             $this->call('redline:user');

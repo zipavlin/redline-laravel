@@ -3,13 +3,10 @@
 namespace Zipavlin\Redline\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Container\BindingResolutionException;
 use RuntimeException;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Process;
 use Throwable;
-use Zipavlin\Redline\Providers\Storage\FileStorageProvider;
-use Zipavlin\Redline\RedlineServiceProvider;
 
 class RemoveCommand extends Command
 {
@@ -30,7 +27,6 @@ class RemoveCommand extends Command
             $this->removeAssets();
             $this->removeConfig();
             $this->removeEnvEntries();
-            $this->removeOrbitCache();
             $this->scanForManualRemovals();
 
             if ($this->option('force') || $this->confirm('Do you want to remove the Redline package as well?')) {
@@ -285,18 +281,5 @@ class RemoveCommand extends Command
         }
 
         rmdir($path);
-    }
-
-    /**
-     * @throws BindingResolutionException
-     */
-    private function removeOrbitCache()
-    {
-        if (RedlineServiceProvider::orbitConfigured()
-            && (RedlineServiceProvider::getStorageProvider() === FileStorageProvider::class)
-            && ($this->option('force') || $this->confirm('Do you want to remove Orbit cache?'))
-        ) {
-            $this->deleteDirectory(storage_path('framework/cache/orbit'));
-        }
     }
 }

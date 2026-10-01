@@ -19,9 +19,15 @@ return new class extends Migration
             $table->unique(['report_id', 'user_id']);
             $table->index('user_id');
 
-            // Deliberately no foreign keys here (unlike 0005): the File (Orbit)
-            // driver cannot enforce them, so cleanup is per-model delete on both
-            // drivers rather than a DB cascade that would only exist on one.
+            $table->foreign('report_id')
+                ->references('id')
+                ->on('redline_reports')
+                ->onDelete('cascade');
+
+            $table->foreign('user_id')
+                ->references('id')
+                ->on('redline_users')
+                ->onDelete('cascade');
         });
     }
 

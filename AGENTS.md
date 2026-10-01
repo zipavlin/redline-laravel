@@ -31,7 +31,7 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 ### PHP (Pest)
 ```
-composer test                    # full Pest suite (baseline: 333 passed, 2 skipped; see Test status)
+composer test                    # full Pest suite (baseline: 346 passed, 0 skipped; see Test status)
 composer test-coverage           # Pest + coverage
 composer format                  # pint (Laravel defaults; no pint.json)
 vendor/bin/pest --filter=Report  # single file / group
@@ -47,13 +47,8 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-With `ryangjchandler/orbit` installed, `vendor/bin/pest` reports **333 passed, 2 skipped
-(995 assertions)**. The 2 skips are the without-Orbit failure paths in
-`tests/Commands/CreateUserCommandTest.php` and `tests/Commands/InstallCommandTest.php`.
-Without Orbit, the File-storage suites skip gracefully instead
-(`tests/Models/FileDriverGrammarTest.php`, `tests/Http/DomainAuthFileStorageTest.php`,
-`tests/Http/UserControllerFileStorageTest.php`, `tests/Auth/LaravelAuthProviderFileStorageTest.php`).
-Skip counts are environment-dependent. Never assume Orbit is available.
+`vendor/bin/pest` reports **346 passed, 0 skipped (1040 assertions)**. The package has a
+single storage backend, so there are no environment-dependent skips.
 
 ## Architecture
 
@@ -64,7 +59,6 @@ Configured via `REDLINE_STORAGE_PROVIDER` / `config('redline.storage.provider')`
 | Provider | Backing | Notes |
 |---|---|---|
 | `DatabaseStorageProvider` (default) | Eloquent + own SQLite connection at `storage/app/redline/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0006_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
-| `FileStorageProvider` | JSON files via `ryangjchandler/orbit` | **Optional** `suggest` in composer.json - not installed in the dev env, hence the skips. Requires Laravel 12+. |
 
 ### Query grammar - `src/Http/Query/`
 
@@ -83,15 +77,15 @@ reference.
 
 ### Report assignees - `Base\Assignment` junction
 
-Many-to-many report ↔ user assignees live in a junction model triad
-(`Base\Assignment` / `Database\Assignment` (`redline_assignments`) / `File\Assignment`
-(JSON `assignments/`)), all bound through the storage providers like the other models.
-The File model carries the same top-of-file `orbitConfigured()` guard as the rest.
-Migration `0006_create_redline_assignments_table.php` deliberately has **no foreign
-keys** (the File driver cannot enforce them) - `unique(report_id, user_id)` + a `user_id`
-index instead. Cleanup is therefore **per-model delete** (`->get()->each(fn ($a) =>
-$a->delete())`) in both `ReportController::destroy()` and `UserController::destroy()`;
-never a query-builder mass delete, which would skip the Orbit file-removal model events.
+Many-to-many report ↔ user assignees live in a junction model pair
+(`Base\Assignment` / `Database\Assignment` (`redline_assignments`)), bound through the
+storage provider like the other models.
+Migration `0006_create_redline_assignments_table.php` declares real foreign keys with
+`CASCADE` (consistent with `0003`–`0005`): `report_id` → `redline_reports.id` and
+`user_id` → `redline_users.id`, plus `unique(report_id, user_id)` for pair idempotency.
+Cleanup is therefore delegated to the database: `ReportController::destroy()` and
+`UserController::destroy()` leave assignments alone, and `AssignmentController::store()`
+relies on `insertOrIgnore` for its additive + idempotent behaviour.
 
 Endpoints (inside the protected `RedlineApiAuth` + `RedlineCsrf` group, both gated by
 `Operation::UPDATE` on the report - developer/admin/author):
@@ -198,16 +192,13 @@ from element attributes.
 ## Testing quirks
 
 - Pest helpers in `tests/Pest.php`: `makeReportData()`, `makeUser()`, `makeAuthToken()`,
-  `authHeaders()`, `cleanDatabaseStorage()`, `cleanJsonStorage()`,
-  `ensureRedlineDirectories()`.
+  `authHeaders()`, `cleanDatabaseStorage()`, `ensureRedlineDirectories()`.
 - Each test gets a fresh in-memory SQLite database (Orchestra Testbench;
   `database.connections.redline` pre-set to `:memory:`).
 - `tests/TestCase.php` boots with `APP_ENV=staging` + `app.debug=true`, re-wires the
   pluggable providers, routes and views (the real service provider skips that wiring
   under `runningInConsole()`), appends `ShowRedlineWidget` to the `web` group, and
   disables Laravel's built-in CSRF for tests.
-- `tests/Models/FileDriverGrammarTest.php` - Orbit-gated, skips gracefully when
-  `ryangjchandler/orbit` is not installed.
 - `tests/ArchTest.php` (pest-plugin-arch) - global ban on `dd`, `dump`, `ray`.
 - JWT signing key in tests is `config('app.key')` (decoded when `base64:`-prefixed).
 - `testbench.yaml` is present and **committed** (was gitignored in the legacy monorepo).
