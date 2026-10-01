@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Zipavlin\Redline\Enums\QueryOperator;
@@ -16,7 +17,7 @@ use Zipavlin\Redline\Http\Query\IncludeField;
 use Zipavlin\Redline\Http\Query\QuerySchema;
 use Zipavlin\Redline\Http\Query\ResourceQuery;
 use Zipavlin\Redline\Models\Concerns\HasQuerySchema;
-use Zipavlin\Redline\Support\AssigneeRow;
+use Zipavlin\Redline\Support\Members;
 
 abstract class Report extends Model
 {
@@ -88,7 +89,7 @@ abstract class Report extends Model
 
     abstract public function comments(): HasMany;
 
-    abstract public function assignments(): HasMany;
+    abstract public function members(): BelongsToMany;
 
     /**
      * The query grammar whitelist for this resource - see the grammar docblock
@@ -146,15 +147,17 @@ abstract class Report extends Model
                     relatedSchema: fn () => User::querySchema(),
                     relatedFilters: ['name'],
                 ),
-                // Relation filter over the assignment junction: `filter[assignee]=<uuid>`
-                // -> whereHas on assignments.user_id. No relatedSchema/relatedFilters on
-                // purpose - the mechanism cannot reach an attribute on a model reached
-                // THROUGH a junction, so `filter[assignee.name:like]` stays unsupported
-                // and 422s on the operator allowlist instead of silently widening.
-                'assignee' => new FilterField(
+                // Relation filter over the member pivot: `filter[member]=<uuid>`
+                // -> whereHas on members.id. `:not`/`:not_in` negate the whole
+                // membership predicate (see FilterField::apply()). No
+                // relatedSchema/relatedFilters on purpose - the mechanism cannot reach
+                // an attribute on a model reached THROUGH a pivot, so
+                // `filter[member.name:like]` stays unsupported and 422s on the operator
+                // allowlist instead of silently widening.
+                'member' => new FilterField(
                     operators: QueryOperator::relation(),
-                    relation: 'assignments',
-                    relationColumn: 'user_id',
+                    relation: 'members',
+                    relationColumn: 'id',
                 ),
                 // Virtual OR-field: matches the pre-grammar `search` box (body OR location).
                 'search' => new FilterField(
@@ -174,34 +177,7 @@ abstract class Report extends Model
                         }
                     },
                 ),
-                // `filter[assigned]=1` -> "assigned to me"; `=0` -> "not assigned to me"
-                // (never a silent no-op, so a typo cannot widen the result set).
-                // Complements `filter[mine]=1` (authored by me).
-                'assigned' => new FilterField(
-                    operators: [QueryOperator::EQ],
-                    resolver: function (Builder $query, string $operator, mixed $value, ResourceQuery $rq): void {
-                        $userId = $rq->user()?->id;
 
-                        $value
-                            ? $query->whereHas('assignments', fn (Builder $inner) => $inner->where('user_id', $userId))
-                            : $query->doesntHave('assignments', 'and', fn (Builder $inner) => $inner->where('user_id', $userId));
-                    },
-                    // Strict parse-time truthy/falsy so a typo'd value 422s instead of
-                    // falling through the resolver's falsy branch as "not assigned".
-                    normalize: function (mixed $value, string $operator, array &$errors): ?bool {
-                        if (FilterField::truthy($value)) {
-                            return true;
-                        }
-
-                        if (FilterField::falsy($value)) {
-                            return false;
-                        }
-
-                        $errors['filter.assigned'] = ["Invalid value [{$value}] for filter[assigned] - use 1/true or 0/false."];
-
-                        return null;
-                    },
-                ),
                 // Relationship existence. `=1`/`true` -> has(), `=0`/`false` -> doesntHave();
                 // anything else 422s rather than silently matching neither (the old
                 // truthy()-only check on has_media/has_comments let a typo'd value fall
@@ -250,22 +226,16 @@ abstract class Report extends Model
                     attributes: ['id', 'name', 'email'],
                     default: ['id', 'name'],
                 ),
-                // Target name is `assignees`; the Eloquent relation is `assignments`.
-                // withCount()/withExists() attach relation-named `assignments_count`/
-                // `assignments_exists`, while serialize() emits target-named
-                // `assignees_count`/`assignees_exists` - see ResourceQuery::serialize().
-                // Do NOT "fix" IncludeField::value() to read the target name: the
-                // attribute attached to the model really is relation-named.
-                'assignees' => new IncludeField(
-                    relation: 'assignments',
+                'members' => new IncludeField(
+                    relation: 'members',
                     operators: [QueryOperator::COUNT, QueryOperator::EXISTS],
-                    eagerLoad: ['assignments.user:id,name'],
+                    eagerLoad: ['members:id,name'],
                     resolver: function (Report $report): ?array {
-                        if (! $report->relationLoaded('assignments')) {
+                        if (! $report->relationLoaded('members')) {
                             return null;
                         }
 
-                        return AssigneeRow::fromAssignments($report->assignments);
+                        return Members::fromUsers($report->members);
                     },
                 ),
                 // `url` reads Screenshot::$report_id and $id - both are always

@@ -10,13 +10,13 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::connection('redline')->create('redline_assignments', function (Blueprint $table): void {
-            $table->uuid('id')->primary();
+        Schema::connection('redline')->create('redline_members', function (Blueprint $table): void {
             $table->uuid('report_id');
             $table->uuid('user_id');
-            $table->timestamps();
 
-            $table->unique(['report_id', 'user_id']);
+            // Composite primary key doubles as the uniqueness guarantee for a
+            // report-user pair, so attach is idempotent without a surrogate id.
+            $table->primary(['report_id', 'user_id']);
             $table->index('user_id');
 
             $table->foreign('report_id')
@@ -33,6 +33,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::connection('redline')->dropIfExists('redline_assignments');
+        Schema::connection('redline')->dropIfExists('redline_members');
     }
 };

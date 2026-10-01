@@ -4,26 +4,23 @@ namespace Zipavlin\Redline\Http\Controllers\Api;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Zipavlin\Redline\Enums\Operation;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Base\Assignment;
 use Zipavlin\Redline\Models\Base\Report;
 use Zipavlin\Redline\Models\Base\User;
-use Zipavlin\Redline\Support\AssigneeRow;
+use Zipavlin\Redline\Support\Members;
 
 /**
- * Report assignees - the write side of the assignment junction.
+ * Report members - the write side of the report-user pivot.
  *
- * Reads (include[assignees], filter[assignee], filter[assigned]) live on
- * Base\Report::querySchema(); these two endpoints mutate pairs and always
- * answer with the report's full, name-sorted assignee list so the client
- * never has to refetch or reconcile.
+ * Reads (include[members], filter[member]) live on Base\Report::querySchema();
+ * these two endpoints mutate pairs and always answer with the report's full,
+ * name-sorted member list so the client never has to refetch or reconcile.
  */
-class AssignmentController extends Controller
+class MemberController extends Controller
 {
     /**
-     * POST /redline/api/report/{report}/assignee
+     * POST /redline/api/report/{report}/member
      *
      * Additive and idempotent: pairs that already exist are left alone, so
      * re-posting the same list is a no-op rather than a 409 or a duplicate row.
@@ -35,24 +32,16 @@ class AssignmentController extends Controller
         $userIds = $this->validatedUserIds($request);
         $this->assertUsersExist($userIds);
 
-        $assignmentRows = array_map(fn (string $userId): array => [
-            'id' => (string) Str::uuid7(),
-            'report_id' => $report->id,
-            'user_id' => $userId,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ], $userIds);
+        // syncWithoutDetaching inserts only the missing pairs and leaves existing
+        // ones untouched, so it is additive + idempotent without a unique-constraint
+        // exception when a concurrent POST wins the race.
+        $report->members()->syncWithoutDetaching($userIds);
 
-        // The unique(report_id, user_id) index makes this additive and
-        // idempotent in one statement: existing pairs are ignored, and a
-        // concurrent POST that wins the race is ignored the same way.
-        app(Assignment::class)->insertOrIgnore($assignmentRows);
-
-        return response()->json(['assignees' => $this->assigneeRows($report)]);
+        return response()->json(['members' => $this->memberRows($report)]);
     }
 
     /**
-     * DELETE /redline/api/report/{report}/assignee
+     * DELETE /redline/api/report/{report}/member
      *
      * Removing a pair that does not exist is a no-op (idempotent), matching store().
      */
@@ -62,12 +51,9 @@ class AssignmentController extends Controller
 
         $userIds = $this->validatedUserIds($request);
 
-        app(Assignment::class)
-            ->where('report_id', $report->id)
-            ->whereIn('user_id', $userIds)
-            ->delete();
+        $report->members()->detach($userIds);
 
-        return response()->json(['assignees' => $this->assigneeRows($report)]);
+        return response()->json(['members' => $this->memberRows($report)]);
     }
 
     /**
@@ -86,9 +72,9 @@ class AssignmentController extends Controller
     }
 
     /**
-     * Reject the whole request when any id does not resolve to an assignable
-     * user, rather than silently skipping it - a partial attach would hide a
-     * client bug. Pending accounts are not assignable (they cannot log in), and
+     * Reject the whole request when any id does not resolve to a user eligible to
+     * be a member, rather than silently skipping it - a partial attach would hide
+     * a client bug. Pending accounts are not eligible (they cannot log in), and
      * neither are guests (they exist only to file anonymous reports).
      *
      * @param  array<int, string>  $userIds
@@ -108,14 +94,12 @@ class AssignmentController extends Controller
     }
 
     /**
-     * The report's current assignees as `{id, name, initials}`.
+     * The report's current members as `{id, name, initials}`.
      *
      * @return array<int, array{id: string, name: string, initials: string}>
      */
-    private function assigneeRows(Report $report): array
+    private function memberRows(Report $report): array
     {
-        return AssigneeRow::fromAssignments(
-            $report->assignments()->with('user:id,name')->get(),
-        );
+        return Members::fromUsers($report->members()->get());
     }
 }

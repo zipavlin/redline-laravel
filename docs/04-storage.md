@@ -1,6 +1,6 @@
 # Storage
 
-Redline persists reports, users, comments, assignments and media in a single
+Redline persists reports, users, comments, members and media in a single
 local backend: Eloquent models on a dedicated SQLite connection named `redline`,
 plus uploaded media under `storage/app/{path.base}`. There is no pluggable
 storage provider - custom storage backends are **not supported**.
@@ -8,9 +8,11 @@ storage provider - custom storage backends are **not supported**.
 ## Database storage
 
 `Zipavlin\Redline\Providers\Storage\StorageProvider` - Eloquent models on a
-dedicated SQLite connection named `redline`. All six model contracts
-(`User`, `Report`, `Screenshot`, `Video`, `Comment`, `Assignment`) bind to
-Eloquent implementations in `src/Models/Database/`.
+dedicated SQLite connection named `redline`. All five model contracts
+(`User`, `Report`, `Screenshot`, `Video`, `Comment`) bind to Eloquent
+implementations in `src/Models/Database/`. The report↔user pivot
+(`redline_members`) is a plain `belongsToMany` on the report - it has no model
+of its own.
 
 ### Where the database lives
 
@@ -31,7 +33,7 @@ is already configured (the test suite injects `:memory:` this way).
 ### Migrations
 
 - Schema lives in numbered migrations `database/redline/0001_…0006_`
-  (`0001_create_redline_users_table` … `0006_create_redline_assignments_table`) -
+  (`0001_create_redline_users_table` … `0006_create_redline_members_table`) -
   numbered, **not** timestamped.
 - For a file database the schema is **not** migrated at runtime. If the database
   file is missing, boot throws:
@@ -42,9 +44,9 @@ is already configured (the test suite injects `:memory:` this way).
 
   > `RuntimeException: Redline database tables not found. Run \`php artisan redline:install\` to set up the database.`
 
-  and if the file exists but the `redline_assignments` table is absent:
+  and if the file exists but the `redline_members` table is absent:
 
-  > `RuntimeException: Redline database is missing the redline_assignments table. Run \`php artisan redline:install\` to migrate it.`
+  > `RuntimeException: Redline database is missing the redline_members table. Run \`php artisan redline:install\` to migrate it.`
 
   `redline:install` creates the schema by running `php artisan migrate
   --path=vendor/zipavlin/redline/database/redline --database=redline`.

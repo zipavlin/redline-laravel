@@ -3,7 +3,6 @@
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Zipavlin\Redline\Enums\Role;
-use Zipavlin\Redline\Models\Database\Assignment;
 use Zipavlin\Redline\Models\Database\Comment;
 use Zipavlin\Redline\Models\Database\Report;
 use Zipavlin\Redline\Models\Database\Screenshot;
@@ -180,35 +179,37 @@ it('comment belongs to author', function () {
 });
 
 // ---------------------------------------------------------------------------
-// Assignment (report <-> user junction)
+// Members (report <-> user pivot, no model of its own)
 // ---------------------------------------------------------------------------
 
-it('links reports and users through the assignment junction', function () {
-    $user = User::on('redline')->create(['name' => 'Assignee', 'email' => 'assignee@example.com', 'role' => 'developer']);
+it('links reports and users through the member pivot', function () {
+    $user = User::on('redline')->create(['name' => 'Member', 'email' => 'member@example.com', 'role' => 'developer']);
     $report = Report::on('redline')->create([
         'url' => 'https://example.com', 'location' => '/', 'status' => 'new',
     ]);
 
-    $assignment = Assignment::on('redline')->create([
+    $report->members()->attach($user->id);
+
+    $loaded = Report::on('redline')->with('members')->find($report->id);
+
+    expect($loaded->members)->toHaveCount(1)
+        ->and($loaded->members->first()->id)->toBe($user->id)
+        ->and($loaded->members->first()->name)->toBe('Member');
+});
+
+it('enforces one member row per report-user pair', function () {
+    $user = User::on('redline')->create(['name' => 'Member', 'email' => 'unique-member@example.com', 'role' => 'developer']);
+    $report = Report::on('redline')->create([
+        'url' => 'https://example.com', 'location' => '/', 'status' => 'new',
+    ]);
+
+    DB::connection('redline')->table('redline_members')->insert([
         'report_id' => $report->id,
         'user_id' => $user->id,
     ]);
 
-    expect($assignment->id)->toMatch('/^[0-9a-f-]{36}$/')
-        ->and(Report::on('redline')->with('assignments')->find($report->id)->assignments)->toHaveCount(1)
-        ->and(User::on('redline')->with('assignments')->find($user->id)->assignments)->toHaveCount(1)
-        ->and($assignment->report->id)->toBe($report->id)
-        ->and($assignment->user->id)->toBe($user->id);
-});
-
-it('enforces one assignment per report-user pair', function () {
-    $user = User::on('redline')->create(['name' => 'Assignee', 'email' => 'unique@example.com', 'role' => 'developer']);
-    $report = Report::on('redline')->create([
-        'url' => 'https://example.com', 'location' => '/', 'status' => 'new',
-    ]);
-
-    Assignment::on('redline')->create(['report_id' => $report->id, 'user_id' => $user->id]);
-
-    expect(fn () => Assignment::on('redline')->create(['report_id' => $report->id, 'user_id' => $user->id]))
-        ->toThrow(QueryException::class);
+    expect(fn () => DB::connection('redline')->table('redline_members')->insert([
+        'report_id' => $report->id,
+        'user_id' => $user->id,
+    ]))->toThrow(QueryException::class);
 });

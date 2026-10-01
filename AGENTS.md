@@ -77,36 +77,36 @@ reference.
 - `ParsedQuery` - immutable result; controllers call `->rows()` / `->aggregate()` /
   `->statusCounts()`.
 
-### Report assignees - `Base\Assignment` junction
+### Report members - `redline_members` pivot
 
-Many-to-many report ↔ user assignees live in a junction model pair
-(`Base\Assignment` / `Database\Assignment` (`redline_assignments`)), bound through the
-storage provider like the other models.
-Migration `0006_create_redline_assignments_table.php` declares real foreign keys with
-`CASCADE` (consistent with `0003`–`0005`): `report_id` → `redline_reports.id` and
-`user_id` → `redline_users.id`, plus `unique(report_id, user_id)` for pair idempotency.
-Cleanup is therefore delegated to the database: `ReportController::destroy()` and
-`UserController::destroy()` leave assignments alone, and `AssignmentController::store()`
-relies on `insertOrIgnore` for its additive + idempotent behaviour.
+Many-to-many report ↔ user members live in a plain `belongsToMany` pivot
+(`redline_members`) with **no model of its own** - `Database\Report::members()` points
+at `Database\User`. Migration `0006_create_redline_members_table.php` declares a
+composite primary key `(report_id, user_id)` (the pair's uniqueness) and real foreign
+keys with `CASCADE` (consistent with `0003`–`0005`): `report_id` → `redline_reports.id`
+and `user_id` → `redline_users.id`. Cleanup is therefore delegated to the database:
+`ReportController::destroy()` and `UserController::destroy()` leave members alone, and
+`MemberController::store()` relies on `syncWithoutDetaching` for its additive +
+idempotent behaviour.
 
 Endpoints (inside the protected `RedlineApiAuth` + `RedlineCsrf` group, both gated by
 `Operation::UPDATE` on the report - developer/admin/author):
 
 | Method | Path | Behaviour |
 |---|---|---|
-| POST | `/report/{report}/assignee` | body `{"user_ids": [...]}`; additive + idempotent; unknown ids → 422 |
-| DELETE | `/report/{report}/assignee` | body `{"user_ids": [...]}`; idempotent; removes only existing pairs |
+| POST | `/report/{report}/member` | body `{"user_ids": [...]}`; additive + idempotent (`syncWithoutDetaching`); unknown ids → 422 |
+| DELETE | `/report/{report}/member` | body `{"user_ids": [...]}`; idempotent (`detach`); removes only existing pairs |
 
-Both respond `{ "assignees": [ { id, name, initials } ] }` - the report's full current
-list, sorted by `name` then `id`.
+Both respond `{ "members": [ { id, name, initials } ] }` - the report's full current
+list, sorted by `name` then `id` (the shared `Support\Members::fromUsers()` projection,
+also used by the read grammar so the two cannot drift).
 
-Read grammar on `Base\Report::querySchema()`: include target `assignees` (relation
-`assignments`; bare / `:count` / `:exists`), filter target `assignee` (relation operators
-over `assignments.user_id`), and filter target `assigned` (`=1` assigned to me, `=0` not
-assigned to me). Note the target-vs-relation naming: `withCount`/`withExists` attach
-`assignments_count`/`assignments_exists`, while `serialize()` emits target-named
-`assignees_count`/`assignees_exists`. `filter[assignee.name:like]` is **not** supported
-(no `relatedSchema` on that filter) and 422s, as intended.
+Read grammar on `Base\Report::querySchema()`: include target `members` (relation
+`members`; bare / `:count` / `:exists` → `members_count`/`members_exists`) and filter
+target `member` (relation operators over `members.id`). `filter[member:not]` /
+`filter[member:not_in]` negate the **whole** membership predicate ("has no such
+member"), not an inner column comparison. `filter[member.name:like]` is **not**
+supported (no `relatedSchema` on that filter) and 422s, as intended.
 
 ### Guard & auth providers (pluggable)
 

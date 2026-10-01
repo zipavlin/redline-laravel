@@ -142,7 +142,8 @@ class ReportController extends Controller
     /**
      * DELETE /redline/api/report/{report}
      *
-     * Delete report, its assignments and associated media files. Own or admin.
+     * Delete report and its associated media files (member rows cascade in the
+     * database). Own or admin.
      */
     public function destroy(Request $request, Report $report): Response|JsonResponse
     {

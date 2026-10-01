@@ -93,8 +93,8 @@ final class FilterField
 
         // A dotted `filter[<target>.<attribute>]` key whose attribute is neither the
         // bare-relation `id` shorthand nor backed by a related schema has nowhere to
-        // go: without this, `filter[assignee.name:eq]=Zoe` would drop `name` and
-        // silently apply `Zoe` against the junction's user_id column instead of 422ing.
+        // go: without this, `filter[member.name:eq]=Zoe` would drop `name` and
+        // silently apply `Zoe` against the pivot's user_id column instead of 422ing.
         if ($attribute !== null && $attribute !== 'id' && $this->relatedSchema === null) {
             $errors["filter.{$key}"] = ["Filter target [{$target}] does not expose attribute [{$attribute}]."];
 
@@ -142,8 +142,8 @@ final class FilterField
         }
 
         if ($this->relation) {
-            // Existence is a whole-relation predicate (has/doesntHave); every other
-            // operator constrains a column on the related row (whereHas + the operator).
+            // Existence is a whole-relation predicate (has/doesntHave); the remaining
+            // operators constrain a column on the related row (negated for `not`/`not_in`).
             if ($parsed['operator'] === QueryOperator::EXISTS->value) {
                 $parsed['value'] ? $builder->has($this->relation) : $builder->doesntHave($this->relation);
 
@@ -152,9 +152,25 @@ final class FilterField
 
             $relationColumn = $this->relationColumn ?? 'id';
 
-            $builder->whereHas($this->relation, function (Builder $inner) use ($parsed, $relationColumn) {
-                self::applyOperator($inner, $relationColumn, $parsed['operator'], $parsed['value']);
-            });
+            // Negated operators negate the WHOLE relation predicate ("has no related
+            // row matching X"), not the inner column comparison ("has a related row
+            // whose column differs from X"). For a to-many relation the latter matches
+            // as soon as one row differs, which is almost never the caller's intent.
+            $negated = in_array($parsed['operator'], [QueryOperator::NOT->value, QueryOperator::NOT_IN->value], true);
+            $operator = match ($parsed['operator']) {
+                QueryOperator::NOT->value => QueryOperator::EQ->value,
+                QueryOperator::NOT_IN->value => QueryOperator::IN->value,
+                default => $parsed['operator'],
+            };
+            $constrain = function (Builder $inner) use ($operator, $relationColumn, $parsed): void {
+                self::applyOperator($inner, $relationColumn, $operator, $parsed['value']);
+            };
+
+            if ($negated) {
+                $builder->doesntHave($this->relation, 'and', $constrain);
+            } else {
+                $builder->whereHas($this->relation, $constrain);
+            }
 
             return;
         }

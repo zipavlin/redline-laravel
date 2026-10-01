@@ -3,6 +3,7 @@
 namespace Zipavlin\Redline\Models\Database;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Zipavlin\Redline\Models\Base\Report as BaseReport;
@@ -33,8 +34,8 @@ class Report extends BaseReport
         return $this->hasMany(Comment::class, 'report_id')->orderBy('created_at');
     }
 
-    public function assignments(): HasMany
+    public function members(): BelongsToMany
     {
-        return $this->hasMany(Assignment::class, 'report_id');
+        return $this->belongsToMany(User::class, 'redline_members', 'report_id', 'user_id');
     }
 }

@@ -5,13 +5,11 @@ namespace Zipavlin\Redline\Providers\Storage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
-use Zipavlin\Redline\Models\Base\Assignment;
 use Zipavlin\Redline\Models\Base\Comment;
 use Zipavlin\Redline\Models\Base\Report;
 use Zipavlin\Redline\Models\Base\Screenshot;
 use Zipavlin\Redline\Models\Base\User;
 use Zipavlin\Redline\Models\Base\Video;
-use Zipavlin\Redline\Models\Database\Assignment as DatabaseAssignment;
 use Zipavlin\Redline\Models\Database\Comment as DatabaseComment;
 use Zipavlin\Redline\Models\Database\Report as DatabaseReport;
 use Zipavlin\Redline\Models\Database\Screenshot as DatabaseScreenshot;
@@ -46,7 +44,6 @@ class StorageProvider
             Screenshot::class => DatabaseScreenshot::class,
             Video::class => DatabaseVideo::class,
             Comment::class => DatabaseComment::class,
-            Assignment::class => DatabaseAssignment::class,
         ];
     }
 
@@ -109,7 +106,7 @@ class StorageProvider
 
         if ($db === ':memory:') {
             if (! Schema::connection('redline')->hasTable('redline_reports')
-                || ! Schema::connection('redline')->hasTable('redline_assignments')) {
+                || ! Schema::connection('redline')->hasTable('redline_members')) {
                 $this->runMigrations();
             }
 
@@ -131,11 +128,11 @@ class StorageProvider
             );
         }
 
-        // An install predating 0006 has reports but not assignments; surface the
-        // upgrade instead of letting every assignment query fail at runtime.
-        if (! Schema::connection('redline')->hasTable('redline_assignments')) {
+        // An install predating 0006 has reports but not members; surface the
+        // upgrade instead of letting every membership query fail at runtime.
+        if (! Schema::connection('redline')->hasTable('redline_members')) {
             throw new \RuntimeException(
-                'Redline database is missing the redline_assignments table. Run `php artisan redline:install` to migrate it.'
+                'Redline database is missing the redline_members table. Run `php artisan redline:install` to migrate it.'
             );
         }
     }
