@@ -11,6 +11,7 @@ use Zipavlin\Redline\Contracts\Listable;
 use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Auth\DomainAuthProvider;
+use Zipavlin\Redline\Providers\Auth\LaravelAuthProvider;
 use Zipavlin\Redline\Providers\Auth\PinAuthProvider;
 use Zipavlin\Redline\Providers\Guard\GuardProvider;
 use Zipavlin\Redline\Providers\Guard\IpGuardProvider;
@@ -89,6 +90,11 @@ class InstallCommand extends Command
             namespace: 'Zipavlin\\Redline\\Providers\\Auth',
             question: 'Which auth provider would you like to use?',
         );
+
+        // Reflect the choice in runtime config immediately: the rest of this
+        // process - handleFirstUser(), and any nested redline:user call - must
+        // see the same provider the .env will provide on the next boot.
+        config(['redline.auth.provider' => $auth]);
 
         // Write env
         $this->writeEnvValue('REDLINE_AUTH_PROVIDER', $auth);
@@ -406,7 +412,12 @@ class InstallCommand extends Command
     {
         $this->line('  <options=bold>First admin user</>');
 
-        if ($this->confirm('Would you like to create the first admin user?', true)) {
+        // Under LaravelAuthProvider there is nothing to create: redline users are
+        // provisioned from host-application logins, so the create flow is blocked.
+        if (is_a(config('redline.auth.provider'), LaravelAuthProvider::class, true)) {
+            $this->line('  Redline users are provisioned automatically on first host-application login;');
+            $this->line('  manage them in your host application.');
+        } elseif ($this->confirm('Would you like to create the first admin user?', true)) {
             $this->call('redline:user');
         }
 

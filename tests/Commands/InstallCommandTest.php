@@ -2,6 +2,8 @@
 
 use Illuminate\Contracts\Console\Kernel;
 use Zipavlin\Redline\Commands\InstallCommand;
+use Zipavlin\Redline\Models\User;
+use Zipavlin\Redline\Providers\Auth\LaravelAuthProvider;
 use Zipavlin\Redline\Providers\Auth\OpenAuthProvider;
 use Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider;
 
@@ -77,6 +79,23 @@ it('accepts an empty features answer ("disable none") and completes the install'
         ->expectsConfirmation('Would you like to create the first admin user?', 'no')
         ->expectsOutputToContain('Redline installed successfully!')
         ->assertExitCode(0);
+});
+
+it('skips creating a user when LaravelAuthProvider is selected during install', function () {
+    fakeInstallCommand();
+
+    $this->artisan('redline:install')
+        ->expectsQuestion('Which auth provider would you like to use?', LaravelAuthProvider::title())
+        ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
+        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
+        ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
+        ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
+        ->expectsOutputToContain('provisioned automatically on first host-application login')
+        ->doesntExpectOutputToContain('Would you like to create the first admin user?')
+        ->assertExitCode(0);
+
+    expect(app(User::class)->count())->toBe(0);
 });
 
 it('writes the SMTP mailer values when the no-DNS SMTP option is chosen', function () {
