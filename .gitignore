@@ -32,3 +32,4 @@ phpstan.neon
 /.opencode
 /.junie
 /.openchamber
+/opencode.json
