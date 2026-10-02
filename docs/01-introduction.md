@@ -65,8 +65,8 @@ element attributes.
 Only parts of the package are gated by environment:
 
 - **Always available** - `vendor:publish` tags (`redline-assets`, `redline-config`,
-  `redline-mail-views`) and the three artisan commands (`redline:install`,
-  `redline:user`, `redline:remove`).
+  `redline-mail-views`) and the four artisan commands (`redline:install`,
+  `redline:update`, `redline:user`, `redline:remove`).
 - **Dashboard** - the SPA shell at `/{redline.path}` (default `/redline`) loads when
   the guard is active **and** the request path starts with the redline path.
 - **API routes + widget injection** - require the guard to be active **and** the

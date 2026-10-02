@@ -38,8 +38,8 @@ and creates a first (admin) user.
 
 The package is partially gated - know what turns on where:
 
-- **Publishing** and the **artisan commands** (`redline:install`, `redline:user`,
-  `redline:remove`) are always available.
+- **Publishing** and the **artisan commands** (`redline:install`, `redline:update`,
+  `redline:user`, `redline:remove`) are always available.
 - The **dashboard** (SPA at `/{redline.path}`, default `/redline`) is gated by the guard
 - The **API routes** and **widget injection** are also gated by the guard (default when `APP_ENV=staging`)
 
@@ -158,6 +158,9 @@ It lists reports and report details, users and user details and simple analytics
 ```bash
 # Interactive setup (storage, auth, mail, features) - writes .env, publishes assets
 php artisan redline:install
+
+# Upgrade an existing install after a composer update (migrations + assets)
+php artisan redline:update
 
 # Create a user / grant admin
 php artisan redline:user

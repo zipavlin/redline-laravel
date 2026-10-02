@@ -1,12 +1,13 @@
 # Commands
 
-Redline ships exactly three artisan commands. They are registered **unconditionally** - in every
+Redline ships exactly four artisan commands. They are registered **unconditionally** - in every
 environment and regardless of guard, auth, or storage configuration - so setup and teardown always
 work, even before the package is "active" on a given host:
 
 | Command | Purpose |
 |---|---|
 | `php artisan redline:install` | Interactive first-time setup |
+| `php artisan redline:update` | Upgrade an existing install to the package version |
 | `php artisan redline:user` | Create a user directly, any role |
 | `php artisan redline:remove` | Permanently remove Redline, its data, and (optionally) the package |
 
@@ -152,15 +153,68 @@ Next steps:
 It also publishes the selected config/assets and creates the Redline SQLite schema on the
 `redline` connection.
 
+## redline:update
+
+`php artisan redline:update` (alias `php artisan redline:upgrade`) upgrades an
+already-installed Redline to the installed package version - run it after a
+`composer update` brings in a new Redline release. It is idempotent and safe
+to re-run.
+
+```bash
+php artisan redline:update              # interactive, with confirmations
+php artisan redline:update --force      # non-interactive, for deploy scripts (-F)
+php artisan redline:update --dry-run    # reports pending migrations and planned steps, mutates nothing
+php artisan redline:update --no-backup  # skip the pre-migration SQLite backup
+```
+
+### Steps
+
+1. **Preflight** - verifies Redline is installed (the `redline` SQLite
+   connection exists and the `redline_reports` table is present). If not, it
+   errors and tells you to run `redline:install` first. An update never
+   creates the database or its directories - that is `redline:install`'s job.
+2. **Pending migrations** - migrations are **not** published to the host; they
+   run from the package path (`database/redline`), and Laravel's `migrations`
+   table on the `redline` connection tracks which ran - so "pending" means not
+   yet applied. Prints `Database is already up to date.` when there is nothing
+   to do. (If the migration state cannot be read, it says so and attempts the
+   migrate anyway.)
+3. **SQLite backup** - copies the database file to
+   `{db}.{YYYYmmdd_HHMMSS}.bak` before migrating. Skipped for `:memory:`
+   databases and under `--no-backup` (which prints a skip note). If the backup
+   fails, the command aborts before migrating.
+4. **Migrate** - runs the pending migrations (`migrate --path=<package
+   database/redline> --realpath --database=redline --force`).
+5. **Assets** - re-publishes to `public/vendor/redline` with `--force`. Unlike
+   `redline:install`, which publishes without `--force`, a plain re-publish
+   would keep serving stale JS/CSS.
+6. **Published config** - only when `config/redline.php` exists: warns it may
+   miss new options and offers to re-publish (default No). Under `--force` it
+   is left untouched with a manual-merge note - never clobbered.
+7. **Published mail views** - only when `resources/views/vendor/redline/mail`
+   exists: offers to re-publish (default No; never clobbered under `--force`).
+8. **Clear caches** - runs `config:clear`, `view:clear`, `route:clear`, since
+   stale caches can pin the previous version after a composer update.
+9. **Summary** - version, migration count, and asset re-publish, plus a
+   `Left untouched: …` line naming any published config/mail views that were
+   left in place (omitted when there were none, or when they were re-published).
+
+With `--dry-run` the command stops after step 2 and prints the planned steps
+instead (pending-migration count, asset target, whether published config or
+mail views would trigger an offer) - it mutates nothing.
+
 ## redline:user
 
-`php artisan redline:user` creates a Redline user **directly in storage**, bypassing all
+`php artisan redline:user` manages Redline users **directly in storage**, bypassing all
 auth-provider registration policies - it works even under
 `Zipavlin\Redline\Providers\Auth\ClosedAuthProvider`, and it can create an admin regardless of
 `REDLINE_AUTH_ALLOW_SELF_ADMIN`. It is the standard way to seed the first admin user.
+`--promote` and `--edit` are mutually exclusive - passing both errors out (exit 1).
+
+### Create (no flag)
 
 ```
-  ● Redline - create user
+  ● Redline - user management
 
 Name: Jane Doe
 Email: jane@example.com
@@ -168,16 +222,67 @@ Password (min 6 characters): ********
 Role: [reporter | developer | admin]
 ```
 
-Rules enforced by the command:
-
-- Name is required.
-- Email must be a valid address and must not already exist.
+- Name is required (trimmed).
+- Email must be a valid address and must not already exist - the duplicate check is
+  case-insensitive.
 - Password is prompted as hidden input and must be at least **6 characters** - note this is
   *looser* than the 8-character minimum enforced by the register/reset flows in the API.
-- Role defaults to **admin**; the other options are `reporter` and `developer`.
+- Role is `reporter` | `developer` | `admin`, defaulting to **admin**.
 
-The storage provider is booted first; if it cannot boot (e.g. the SQLite schema is missing), the
-command fails with the provider's message - run `redline:install` first.
+Under `Zipavlin\Redline\Providers\Auth\LaravelAuthProvider` (or a subclass) creation is
+refused (exit 1): users are provisioned automatically on first host-application login, so
+manage them in the host app and use `--edit` / `--promote` for existing Redline users:
+
+```
+Users are provisioned automatically on first host-application login under LaravelAuthProvider.
+  Manage users in the host application instead of creating them here.
+  Use --edit or --promote to adjust an existing Redline user.
+```
+
+### Promote (`--promote`)
+
+```bash
+php artisan redline:user --promote
+```
+
+Lists every non-admin user (the shared guest identity is never listed) as a multi-select;
+each selected user is promoted to **admin**. When there is nothing promotable the command
+prints a message and exits 0, and an empty selection prints
+`No users selected; nothing promoted.` (exit 0):
+
+```
+  ✓ Promoted Jane Doe (jane@example.com) to admin.
+```
+
+### Edit (`--edit`)
+
+```bash
+php artisan redline:user --edit
+```
+
+Select one user (guest excluded), then re-answer each attribute - blank keeps the current
+value, except Role, which preselects the current one:
+
+- Name - blank keeps the current value; an empty name errors.
+- Email - blank keeps the current value; otherwise it must be valid and case-insensitively
+  unique (excluding the user being edited).
+- Password - blank keeps the current value; when given, min 6 characters, re-hashed on save,
+  and bumps `token_version`, invalidating all outstanding JWTs.
+- Role - `reporter` | `developer` | `admin`, preselected to the current role of the user.
+
+The command prints each changed attribute, or `No changes made.` when nothing changed:
+
+```
+  ✓ Updated name.
+  ✓ Password updated.
+  ● Existing sessions invalidated (all tokens revoked).
+```
+
+Under `LaravelAuthProvider`, changing the email of a user additionally warns that the next host
+login for the new address provisions a NEW reporter - email is the host-session join key.
+
+The storage provider is booted first in every mode; if it cannot boot (e.g. the SQLite schema
+is missing), the command fails with the boot error message - run `redline:install` first.
 
 ## redline:remove --force
 
@@ -240,7 +345,8 @@ by hand. With `--force`, this prompt is skipped and the package is removed autom
 | Command | Purpose | Flags |
 |---|---|---|
 | `redline:install` | Interactive setup: storage, auth, guard, features, email; writes `.env`, publishes config/assets, creates DB schema, first admin | - |
-| `redline:user` | Create a user directly in storage with any role; bypasses auth-provider policies (password min 6) | - |
+| `redline:update` (alias `redline:upgrade`) | Upgrade an existing install: preflight check, pending migrations (+ SQLite backup), assets re-published with `--force`, optional config/mail re-publish, cache clears | `-F`, `--force` - non-interactive; published config/mail views left untouched; `--dry-run` - report only; `--no-backup` - skip backup |
+| `redline:user` | Create/edit/promote a user directly in storage; bypasses auth-provider policies (password min 6) | `--promote`, `--edit` (mutually exclusive) |
 | `redline:remove` | Wipe all Redline data, published assets/config, and `REDLINE_*` `.env` entries; scan for manual references; optionally `composer remove zipavlin/redline` | `-F`, `--force` - skip all confirmations (including package removal) |
 
 ## Related

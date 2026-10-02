@@ -120,6 +120,24 @@ These three tags are available in **every** environment - they are not gated by 
 - **Verify activation on staging** - deploy with `APP_ENV=staging` and confirm the widget injects on a test page and `/redline/dashboard` loads. If nothing appears, check the guard config first - the widget/API are gated; the dashboard shell is not.
 - **Mail** - if you skipped email setup, either configure a Laravel mailer or accept that password-reset and new-report emails are silently skipped (set `REDLINE_MAIL=false` to disable them entirely; see [09-emails.md](09-emails.md)).
 
+## Updating
+
+After a `composer update` brings in a new Redline version, apply it with:
+
+```bash
+php artisan redline:update
+```
+
+The command verifies the install (on a fresh host it points you at
+`redline:install` instead - an update never creates the database), reports
+and runs only the pending package migrations with a pre-migration SQLite
+backup, re-publishes assets with `--force`, offers to re-publish a published
+config or mail views (never overwritten under `--force`), and clears the
+config/view/route caches. It is idempotent and safe to re-run. Flags:
+`--force` (`-F`) for deploy scripts, `--dry-run` to preview,
+`--no-backup` to skip the backup. Full details in
+[08-commands.md](08-commands.md#redlineupdate).
+
 ## Uninstalling
 
 ```bash

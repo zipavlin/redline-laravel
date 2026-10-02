@@ -11,8 +11,8 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 - **Always registered**, regardless of environment: `vendor:publish` tags
   (`redline-assets` → `public/vendor/redline`, `redline-config` → `config/redline.php`,
-  `redline-mail-views` → `resources/views/vendor/redline/mail`) and the 3 artisan commands
-  (`redline:install`, `redline:user`).
+  `redline-mail-views` → `resources/views/vendor/redline/mail`) and the 4 artisan commands
+  (`redline:install`, `redline:update`, `redline:user`, `redline:remove`).
 - **Loaded whenever a local storage provider is active**: the dashboard shell
   (`routes/web.php` catch-all serving the SPA at `/{redline.path}`, default `/redline`).
 - **Gated by the guard**: the API routes (`routes/api.php`) and widget injection
@@ -185,7 +185,10 @@ from element attributes.
 - `redline:install` - interactive setup (auth provider, email, disabled
   features, writes `.env`, publishes config+assets; it also creates the SQLite
   schema).
-- `redline:user` - admin create/grant.
+- `redline:update` (alias `redline:upgrade`) - upgrade an installed Redline: run
+  pending package migrations, re-publish assets, offer config/mail re-publish
+  (never clobbered under `--force`); flags `--force`, `--dry-run`, `--no-backup`.
+- `redline:user` - create/edit/promote users directly in storage (create blocked under `LaravelAuthProvider`); flags `--promote`, `--edit` (mutually exclusive).
 - `redline:remove` - wipe all redline data, removes redline from the project.
 
 `redline:list` and `redline:dev` were removed; do not document them.

@@ -217,6 +217,6 @@ Some providers admit users in two steps. Pending responses are signaled by **HTT
 
 - [Configuration](03-configuration.md) - full env-var reference and `config/redline.php` structure
 - [Guards](06-guards.md) - when Redline is active (environment/debug guards, `REDLINE_GUARD_EXCLUDE`)
-- [Commands](08-commands.md) - `redline:install`, `redline:user`, `redline:remove`
+- [Commands](08-commands.md) - `redline:install`, `redline:update`, `redline:user`, `redline:remove`
 - [Emails](09-emails.md) - verification, password-reset and invitation mail templates
 - [Widget & dashboard](11-widget-dashboard.md) - the identity modal, capabilities from `/api/bootstrap`, and client auth flow

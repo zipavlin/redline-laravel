@@ -17,7 +17,7 @@ Part of the package is registered unconditionally; the guard only governs the re
 | Capability | Always registered? | Gated by |
 |---|---|---|
 | `vendor:publish` tags (`redline-assets`, `redline-config`, `redline-mail-views`) | Yes | - |
-| Artisan commands (`redline:install`, `redline:user`, `redline:remove`) | Yes (console) | - |
+| Artisan commands (`redline:install`, `redline:update`, `redline:user`, `redline:remove`) | Yes (console) | - |
 | Dashboard SPA at `/{redline.path}` (default `/redline`) | No | `isActive` **and** request path starts with `redline.path` **and** storage is local |
 | API routes at `/{redline.path}/api/...` | No | `isActive` **and** not excluded **and** storage is local |
 | Widget script injection into `web` responses | No | `isActive` **and** not excluded (re-checked per request) |

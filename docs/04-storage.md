@@ -49,7 +49,11 @@ is already configured (the test suite injects `:memory:` this way).
   > `RuntimeException: Redline database is missing the redline_members table. Run \`php artisan redline:install\` to migrate it.`
 
   `redline:install` creates the schema by running `php artisan migrate
-  --path=vendor/zipavlin/redline/database/redline --database=redline`.
+  --path=vendor/zipavlin/redline/database/redline --database=redline`. On an
+already-installed host, `php artisan redline:update` applies only the
+pending package migrations (with a pre-migration SQLite backup), then
+re-publishes assets and clears stale caches - see
+[Commands](08-commands.md#redlineupdate).
 - In-memory databases (`:memory:`) auto-migrate at boot - this is how the
   package's own test suite gets its schema.
 
@@ -129,4 +133,4 @@ Deleting a report also deletes its screenshot/video files from disk.
 - [Installation](02-installation.md) - `redline:install` setup flow
 - [Configuration](03-configuration.md) - all environment variables
 - [Resources](07-resources.md) - report/screenshot/video API endpoints
-- [Commands](08-commands.md) - `redline:install`, `redline:user`, `redline:remove`
+- [Commands](08-commands.md) - `redline:install`, `redline:update`, `redline:user`, `redline:remove`
