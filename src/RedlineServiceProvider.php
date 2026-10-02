@@ -18,6 +18,7 @@ use Illuminate\Support\Str;
 use Zipavlin\Redline\Commands\CreateUserCommand;
 use Zipavlin\Redline\Commands\InstallCommand;
 use Zipavlin\Redline\Commands\RemoveCommand;
+use Zipavlin\Redline\Commands\UpdateCommand;
 use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Http\Middleware\ShowRedlineWidget;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
@@ -98,6 +99,7 @@ class RedlineServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InstallCommand::class,
+                UpdateCommand::class,
                 RemoveCommand::class,
                 CreateUserCommand::class,
             ]);
