@@ -80,10 +80,51 @@ it('filters users by role and sorts by name', function () {
         ->and($body[1]['name'])->toBe('Bravo Dev');
 });
 
-it('rejects non-admins from the user index', function () {
-    $headers = authHeaders('developer');
+it('lets reporters and developers list users, with filters and includes', function () {
+    makeUser('reporter');
+    makePendingUser();
 
-    $this->getJson('/redline/api/user', $headers)->assertStatus(403);
+    foreach (['reporter', 'developer'] as $role) {
+        $body = $this->getJson('/redline/api/user?'.USER_INCLUDE.'&filter[status]=approved', authHeaders($role))
+            ->assertStatus(200)
+            ->json();
+
+        expect($body)->toHaveKeys(['data', 'meta'])
+            ->and($body['data'][0])->toHaveKeys([
+                'id', 'status', 'created_at', 'name', 'email', 'role', 'reports_count', 'comments_count',
+            ])
+            ->and(collect($body['data'])->pluck('status')->unique()->all())->toBe(['approved']);
+    }
+});
+
+it('rejects unauthenticated callers from the user index', function () {
+    $this->getJson('/redline/api/user')->assertStatus(401);
+});
+
+it('serves the widget member-picker query to a reporter', function () {
+    $caller = makeUser('reporter');
+    $developer = makeUser('developer');
+    $admin = makeUser('admin');
+    makePendingUser();
+
+    $body = $this->getJson(
+        '/redline/api/user?filter[status]=approved&filter[role:in]=reporter,developer,admin'
+            .'&include[]=name&include[]=initials&sort[name]=asc',
+        ['Authorization' => 'Bearer '.makeAuthToken($caller)],
+    )
+        ->assertStatus(200)
+        ->json('data');
+
+    // Four approved users (the beforeEach admin plus the three seeded here); the
+    // pending user is dropped by filter[status].
+    $expectedNames = [$this->admin['name'], $caller['name'], $developer['name'], $admin['name']];
+    sort($expectedNames);
+
+    expect($body)->toHaveCount(4)
+        ->and($body[0])->toHaveKeys(['id', 'status', 'created_at', 'name', 'initials'])
+        ->and($body[0])->not->toHaveKey('email')
+        ->and(collect($body)->pluck('status')->unique()->all())->toBe(['approved'])
+        ->and(collect($body)->pluck('name')->all())->toBe($expectedNames);
 });
 
 // ---------------------------------------------------------------------------

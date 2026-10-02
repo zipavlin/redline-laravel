@@ -20,7 +20,7 @@ use Zipavlin\Redline\Rules\UniqueUserEmailRule;
 class UserController extends Controller
 {
     /**
-     * GET /redline/api/user (admin only)
+     * GET /redline/api/user (any authenticated user; PII behind explicit include[])
      *
      * Grammar-driven list (filter[]/include[]/sort[]/paginate[] - see
      * User::querySchema()). Tab counts are fetched separately via /user/aggregate
@@ -28,8 +28,6 @@ class UserController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $this->checkAdmin($request);
-
         $result = User::resourceQuery($request)
             ->use(QueryCapability::FILTER, QueryCapability::INCLUDE, QueryCapability::SORT, QueryCapability::PAGINATE)
             ->parse()

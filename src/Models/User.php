@@ -136,17 +136,20 @@ class User extends Model
     }
 
     /**
-     * The query grammar whitelist for the admin-only /user collection endpoint.
+     * The query grammar whitelist for the /user collection endpoint, whose list
+     * request is available to any authenticated user (writes and the other
+     * endpoints stay admin-gated).
      *
-     * SECURITY NOTE: this schema serves two contexts - its own admin-gated
-     * endpoint (where email/role/status filtering is fine) AND relation-attribute
-     * delegation from sibling resources (`filter[author.name:like]` on the
-     * all-roles /report endpoint). Those are different trust levels. The
-     * delegating resource controls what it exposes via FilterField::$relatedFilters
-     * (Report allows only `name`), so declaring `email`/`role`/`status` here can
-     * NOT reopen the `filter[author.email:like]` enumeration oracle on /report -
-     * a relation-attribute filter is a boolean oracle read through meta.total,
-     * and the allowlist is what stops it. See FilterField.
+     * SECURITY NOTE: this schema serves two contexts - its own endpoint (where
+     * email/role/status filtering is fine, and PII stays behind explicit
+     * include[]) AND relation-attribute delegation from sibling resources
+     * (`filter[author.name:like]` on the all-roles /report endpoint). Those are
+     * different trust levels. The delegating resource controls what it exposes
+     * via FilterField::$relatedFilters (Report allows only `name`), so declaring
+     * `email`/`role`/`status` here can NOT reopen the `filter[author.email:like]`
+     * enumeration oracle on /report - a relation-attribute filter is a boolean
+     * oracle read through meta.total, and the allowlist is what stops it. See
+     * FilterField.
      */
     public static function querySchema(): QuerySchema
     {

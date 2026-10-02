@@ -366,7 +366,10 @@ the report's author), except `DELETE` additionally lets an eligible (approved, n
 
 ## Users
 
-All user endpoints are **admin-only** (non-admin → `403` `"Admin access required."`).
+All user endpoints are **admin-only** (non-admin → `403` `"Admin access required."`),
+with one exception: the `GET /user` list is available to **any authenticated user**
+(the widget's member picker needs it). PII stays behind explicit `include[]` there -
+the base row is `id`/`status`/`created_at`.
 
 | Method | Path | Action | Notes |
 |---|---|---|---|
@@ -379,7 +382,8 @@ All user endpoints are **admin-only** (non-admin → `403` `"Admin access requir
 | POST | `/user/{user}/approve` | `UserController@approve` | approve pending registration |
 | POST | `/user/{user}/reset-password` | `UserController@resetPassword` | force password reset |
 
-- `GET /user` - grammar-driven (`filter[]`, `include[]`, `sort[]`, `paginate[]`); see
+- `GET /user` - grammar-driven (`filter[]`, `include[]`, `sort[]`, `paginate[]`);
+  available to any authenticated user (list only); see
   [Query grammar](#query-grammar) for the user whitelist.
 - `GET /user/aggregate` - tab counts, e.g. the frontend sends
   `?aggregate[status:count]=approved,pending&filter[search]=...&filter[role]=...`.
@@ -630,8 +634,9 @@ Aggregates:
 
 ### User resource whitelist (`User::querySchema()`)
 
-Serves the admin-only `/user` endpoints **and** relation-attribute delegation from
-`filter[author.name:like]` on `/report`. The delegation boundary is
+Serves the `/user` endpoints (the list is available to any authenticated user;
+writes and the remaining endpoints are admin-only) **and** relation-attribute
+delegation from `filter[author.name:like]` on `/report`. The delegation boundary is
 `FilterField::$relatedFilters` - declaring `email`/`role`/`status` here does **not** make
 them reachable through `/report`'s `author` relation.
 
