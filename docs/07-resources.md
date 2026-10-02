@@ -195,7 +195,7 @@ All report routes are protected. Route names: only the auth routes and `bootstra
 | POST | `/report/{report}/move` | `ReportController@move` | UPDATE (own or developer+) |
 | PATCH | `/report/{report}/status` | `ReportController@status` | UPDATE + transition rules |
 | POST | `/report/{report}/member` | `MemberController@store` | UPDATE (own or developer+) |
-| DELETE | `/report/{report}/member` | `MemberController@destroy` | UPDATE (own or developer+) |
+| DELETE | `/report/{report}/member` | `MemberController@destroy` | UPDATE (own or developer+) or self-removal |
 | GET | `/report/{report}/comment` | `CommentController@index` | LIST |
 | POST | `/report/{report}/comment` | `CommentController@store` | CREATE (+ `comments` feature) |
 | PATCH | `/report/{report}/comment/{comment}` | `CommentController@update` | EDIT (author only) |
@@ -313,7 +313,7 @@ DELETE /{redline.path}/api/report/{report}/member
 
 Body: `{ "user_ids": ["<uuid>", ...] }` - required, array, **1..100** ids (each a string
 up to 255 chars). Both are gated by `Operation::UPDATE` on the report (developer/admin or
-the report's author); everyone else gets `403`.
+the report's author), except `DELETE` additionally lets an eligible (approved, non-guest) caller remove exactly themselves by passing only their own id; everyone else, and any other id list, gets `403`.
 
 - `POST` is **additive + idempotent** (`syncWithoutDetaching`): only pairs that do not
   already exist are created, so re-posting the same list is a no-op, not a `409`.

@@ -95,14 +95,31 @@ it('rejects a missing or empty user_ids payload with 422', function () {
     $this->deleteJson($url, [], $headers)->assertStatus(422);
 });
 
-it('forbids a non-author reporter from adding and removing members', function () {
+it('forbids a non-author reporter from adding a member', function () {
     ['report' => $report] = memberTarget();
     $member = memberUser('Target User', 'target@example.com');
-    $headers = authHeaders('reporter');
-    $url = "/redline/api/report/{$report->id}/member";
 
-    $this->postJson($url, ['user_ids' => [$member->id]], $headers)->assertStatus(403);
-    $this->deleteJson($url, ['user_ids' => [$member->id]], $headers)->assertStatus(403);
+    $this->postJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$member->id]],
+        authHeaders('reporter'),
+    )->assertStatus(403);
+
+    expect(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(0);
+});
+
+it('forbids a non-author reporter from removing another user', function () {
+    ['report' => $report] = memberTarget();
+    $member = memberUser('Target User', 'target@example.com');
+    $report->members()->attach($member->id);
+
+    $this->deleteJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$member->id]],
+        authHeaders('reporter'),
+    )->assertStatus(403);
+
+    expect(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(1);
 });
 
 it('lets the report author (a reporter) add a member', function () {
@@ -137,6 +154,130 @@ it('removes the pair on DELETE and returns the remaining members', function () {
 
     // Removing an already-removed pair is a no-op, not an error.
     $this->deleteJson($url, ['user_ids' => [$drop->id]], $headers)->assertStatus(200);
+});
+
+it('lets a non-author reporter remove themselves from the member list', function () {
+    ['report' => $report] = memberTarget();
+    $reporter = memberUser('Self Remover', 'self-remover@example.com', 'reporter');
+    $other = memberUser('Other Dev', 'other-remover@example.com');
+    $report->members()->attach([$reporter->id, $other->id]);
+
+    $body = $this->deleteJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$reporter->id]],
+        ['Authorization' => 'Bearer '.makeAuthToken($reporter->toArray())],
+    )->assertStatus(200)->json();
+
+    expect($body['members'])->toHaveCount(1)
+        ->and($body['members'][0]['id'])->toBe($other->id)
+        ->and(DB::connection('redline')->table('redline_members')->where('user_id', $reporter->id)->count())->toBe(0)
+        ->and(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(1);
+});
+
+it('forbids a non-author reporter from removing themselves together with another user', function () {
+    ['report' => $report] = memberTarget();
+    $reporter = memberUser('Self Plus Other', 'self-plus@example.com', 'reporter');
+    $other = memberUser('Another Dev', 'another-plus@example.com');
+    $report->members()->attach([$reporter->id, $other->id]);
+
+    $this->deleteJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$reporter->id, $other->id]],
+        ['Authorization' => 'Bearer '.makeAuthToken($reporter->toArray())],
+    )->assertStatus(403);
+
+    expect(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(2);
+});
+
+it('treats a non-member reporter removing themselves as an idempotent no-op', function () {
+    ['report' => $report] = memberTarget();
+    $reporter = memberUser('Not A Member', 'not-member@example.com', 'reporter');
+    $other = memberUser('Kept Dev', 'kept-after-noop@example.com');
+    $report->members()->attach($other->id);
+
+    $body = $this->deleteJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$reporter->id]],
+        ['Authorization' => 'Bearer '.makeAuthToken($reporter->toArray())],
+    )->assertStatus(200)->json();
+
+    expect($body['members'])->toHaveCount(1)
+        ->and($body['members'][0]['id'])->toBe($other->id)
+        ->and(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(1);
+});
+
+it('validates an empty user_ids payload before authorizing a non-author DELETE', function () {
+    ['report' => $report] = memberTarget();
+    $reporter = memberUser('Empty Payload', 'empty-payload@example.com', 'reporter');
+
+    $this->deleteJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => []],
+        ['Authorization' => 'Bearer '.makeAuthToken($reporter->toArray())],
+    )->assertStatus(422);
+});
+
+it('denies a guest removing themselves from a report', function () {
+    ['report' => $report] = memberTarget();
+    $guest = memberUser('Guest User', 'guest-self@example.com', 'guest');
+    $report->members()->attach($guest->id);
+
+    $this->deleteJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$guest->id]],
+        ['Authorization' => 'Bearer '.makeAuthToken($guest->toArray())],
+    )->assertStatus(403);
+
+    expect(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(1);
+});
+
+it('denies a pending user removing themselves from a report', function () {
+    ['report' => $report] = memberTarget();
+    $pending = app(User::class)->create([
+        'name' => 'Pending Self Remover',
+        'email' => 'pending-self@example.com',
+        'role' => 'reporter',
+        'status' => 'pending',
+    ]);
+    $report->members()->attach($pending->id);
+
+    $this->deleteJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$pending->id]],
+        ['Authorization' => 'Bearer '.makeAuthToken($pending->toArray())],
+    )->assertStatus(403);
+
+    expect(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(1);
+});
+
+it('lets the report author (a reporter) remove another user', function () {
+    ['report' => $report, 'author' => $author] = memberTarget();
+    $member = memberUser('Assigned Dev', 'author-removes@example.com');
+    $report->members()->attach($member->id);
+
+    $body = $this->deleteJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$member->id]],
+        ['Authorization' => 'Bearer '.makeAuthToken($author->toArray())],
+    )->assertStatus(200)->json();
+
+    expect($body['members'])->toBe([])
+        ->and(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(0);
+});
+
+it('collapses a duplicated self id to a single removal for a non-author reporter', function () {
+    ['report' => $report] = memberTarget();
+    $reporter = memberUser('Dup Self', 'dup-self@example.com', 'reporter');
+    $report->members()->attach($reporter->id);
+
+    $body = $this->deleteJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$reporter->id, $reporter->id]],
+        ['Authorization' => 'Bearer '.makeAuthToken($reporter->toArray())],
+    )->assertStatus(200)->json();
+
+    expect($body['members'])->toBe([])
+        ->and(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(0);
 });
 
 // ---------------------------------------------------------------------------

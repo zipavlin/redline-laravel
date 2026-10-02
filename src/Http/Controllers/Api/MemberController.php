@@ -13,7 +13,7 @@ use Zipavlin\Redline\Support\Members;
 /**
  * Report members - the write side of the report-user pivot.
  *
- * Reads (include[members], filter[member]) live on Base\Report::querySchema();
+ * Reads (include[members], filter[member]) live on Report::querySchema();
  * these two endpoints mutate pairs and always answer with the report's full,
  * name-sorted member list so the client never has to refetch or reconcile.
  */
@@ -47,9 +47,12 @@ class MemberController extends Controller
      */
     public function destroy(Request $request, Report $report): JsonResponse
     {
-        $this->checkUser($request, Operation::UPDATE, $report);
-
+        $user = $this->authUser($request);
         $userIds = $this->validatedUserIds($request);
+
+        if (! $report->canUserRemoveMembers($user, $userIds)) {
+            abort(403, 'Forbidden.');
+        }
 
         $report->members()->detach($userIds);
 

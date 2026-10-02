@@ -88,13 +88,12 @@ and `user_id` → `redline_users.id`. Cleanup is therefore delegated to the data
 `MemberController::store()` relies on `syncWithoutDetaching` for its additive +
 idempotent behaviour.
 
-Endpoints (inside the protected `RedlineApiAuth` + `RedlineCsrf` group, both gated by
-`Operation::UPDATE` on the report - developer/admin/author):
+Endpoints (inside the protected `RedlineApiAuth` + `RedlineCsrf` group):
 
 | Method | Path | Behaviour |
 |---|---|---|
-| POST | `/report/{report}/member` | body `{"user_ids": [...]}`; additive + idempotent (`syncWithoutDetaching`); unknown ids → 422 |
-| DELETE | `/report/{report}/member` | body `{"user_ids": [...]}`; idempotent (`detach`); removes only existing pairs |
+| POST | `/report/{report}/member` | body `{"user_ids": [...]}`; `Operation::UPDATE`-gated (developer/admin/author); additive + idempotent (`syncWithoutDetaching`); unknown ids → 422 |
+| DELETE | `/report/{report}/member` | body `{"user_ids": [...]}`; `Operation::UPDATE`-gated (developer/admin/author) **or** an eligible (approved, non-guest) caller removing exactly themselves; idempotent (`detach`); removes only existing pairs |
 
 Both respond `{ "members": [ { id, name, initials } ] }` - the report's full current
 list, sorted by `name` then `id` (the shared `Support\Members::fromUsers()` projection,

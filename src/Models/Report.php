@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Zipavlin\Redline\Enums\Operation;
 use Zipavlin\Redline\Enums\QueryOperator;
 use Zipavlin\Redline\Enums\Status;
 use Zipavlin\Redline\Http\Query\AggregateField;
@@ -83,6 +84,26 @@ class Report extends Model
     public function canUserSetStatus(User $user, Status $to): bool
     {
         return in_array($to, $this->allowedStatusTargets($user), true);
+    }
+
+    /**
+     * Membership management is developer/author-only, with one exception: a
+     * reporter may remove exactly themselves. Any other target list, including
+     * one that pairs self with someone else, falls back to Operation::UPDATE.
+     * The self-removal branch also requires an eligible identity (approved,
+     * non-guest) - the same rule the write side enforces on members.
+     *
+     * @param  array<int, string>  $userIds
+     */
+    public function canUserRemoveMembers(User $user, array $userIds): bool
+    {
+        if ($user->can(Operation::UPDATE, $this)) {
+            return true;
+        }
+
+        return $userIds === [$user->id]
+            && $user->isApproved
+            && ! $user->isGuest;
     }
 
     public function author(): BelongsTo
