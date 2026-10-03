@@ -104,6 +104,37 @@ it('S2: strips scripts from comment bodies', function () {
     expect($comment['body'])->not->toContain('<script');
 });
 
+it('S2: preserves a TipTap mention span and its data-id on write', function () {
+    $mention = '<p>Ping <span data-type="mention" class="mention" data-id="user-42" '
+        .'data-label="Jane Doe" data-mention-suggestion-char="@">@Jane Doe</span></p>';
+
+    $body = $this->postJson('/redline/api/report', makeReportData(['body' => $mention]), authHeaders('reporter'))
+        ->assertStatus(201)->json();
+
+    expect($body['body'])
+        ->toContain('data-type="mention"')
+        ->toContain('data-id="user-42"')
+        ->toContain('data-label="Jane Doe"')
+        ->toContain('data-mention-suggestion-char="@"')
+        ->toContain('class="mention"')
+        ->toContain('@Jane Doe');
+});
+
+it('S2: strips event handlers, styles and scripts from a forged mention span', function () {
+    $forged = '<p><span data-type="mention" data-id="x" data-evil="1" onclick="alert(1)" style="color:red">'
+        .'<script>alert(2)</script>@Eve</span></p>';
+
+    $body = $this->postJson('/redline/api/report', makeReportData(['body' => $forged]), authHeaders('reporter'))
+        ->assertStatus(201)->json();
+
+    expect($body['body'])
+        ->not->toContain('onclick')
+        ->not->toContain('style=')
+        ->not->toContain('<script')
+        ->not->toContain('data-evil')
+        ->toContain('@Eve');
+});
+
 // ---------------------------------------------------------------------------
 // S4 - auth endpoints are rate-limited
 // ---------------------------------------------------------------------------

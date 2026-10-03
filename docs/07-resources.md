@@ -249,7 +249,9 @@ Validation (all fields optional unless marked):
 
 The report is created with `status: new` and attributed to the authenticated user (or the
 shared Guest user). `body` is HTML-sanitized server-side (allowlist: `p,br,strong,em,s,a,
-ul,ol,li`, safe link schemes, `target=_blank`). Developers/admins (except the reporter)
+ul,ol,li`, plus a `span` carrying only the TipTap mention attributes
+`data-type|data-id|data-label|data-mention-suggestion-char|class`; safe link schemes,
+`target=_blank`). Developers/admins (except the reporter)
 are emailed a new-report notification when a mailer is configured; the mail send is
 best-effort and never fails the request.
 

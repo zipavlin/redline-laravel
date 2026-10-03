@@ -447,6 +447,23 @@ it('refuses to add a pending user with 422', function () {
     expect(DB::connection('redline')->table('redline_members')->where('user_id', $pending->id)->count())->toBe(0);
 });
 
+it('refuses to add a guest user with 422', function () {
+    ['report' => $report] = memberTarget();
+    $guest = app(User::class)->create([
+        'name' => 'Guest Target',
+        'email' => 'guest-member@example.com',
+        'role' => 'guest',
+    ]);
+
+    $this->postJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$guest->id]],
+        authHeaders('developer'),
+    )->assertStatus(422)->assertJson(['message' => 'One or more user ids are unknown.']);
+
+    expect(DB::connection('redline')->table('redline_members')->where('user_id', $guest->id)->count())->toBe(0);
+});
+
 it('treats a DELETE of an unknown user id as a no-op', function () {
     ['report' => $report] = memberTarget();
     $kept = memberUser('Kept Dev', 'kept@example.com');

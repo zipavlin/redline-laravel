@@ -59,21 +59,35 @@ class Controller extends \Illuminate\Routing\Controller
         }
 
         static $purifier = null;
-
-        if ($purifier === null) {
-            $config = HTMLPurifier_Config::createDefault();
-            // No custom HTMLDefinition → definition caching is unnecessary and
-            // would otherwise write serialized files to the vendor dir.
-            $config->set('Cache.DefinitionImpl', null);
-            $config->set('HTML.Allowed', 'p,br,strong,em,s,a[href|title],ul,ol,li');
-            $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true, 'mailto' => true]);
-            // Force links to open safely (target=_blank + rel=noopener noreferrer).
-            $config->set('HTML.TargetBlank', true);
-            $config->set('Attr.AllowedFrameTargets', ['_blank']);
-
-            $purifier = new \HTMLPurifier($config);
-        }
+        $purifier ??= self::makePurifier();
 
         return $purifier->purify($html);
+    }
+
+    private static function makePurifier(): \HTMLPurifier
+    {
+        $config = HTMLPurifier_Config::createDefault();
+        // A custom HTMLDefinition is registered below (mention data-*
+        // attributes), so caching stays off to avoid writing serialized files
+        // to the vendor dir.
+        $config->set('Cache.DefinitionImpl', null);
+        // `span` carries the TipTap mention node; only its mention attributes
+        // are allowed, so a forged span cannot smuggle on*/style/script.
+        $config->set('HTML.Allowed', 'p,br,strong,em,s,a[href|title],ul,ol,li,span[data-type|data-id|data-label|data-mention-suggestion-char|class]');
+        $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true, 'mailto' => true]);
+        // Force links to open safely (target=_blank + rel=noopener noreferrer).
+        $config->set('HTML.TargetBlank', true);
+        $config->set('Attr.AllowedFrameTargets', ['_blank']);
+
+        // HTMLPurifier's default HTML 4.01 doctype has no `data-*` attributes,
+        // so listing them in HTML.Allowed alone still drops them (with a
+        // warning); they must be registered on the element definition.
+        $definition = $config->getHTMLDefinition(true);
+        $definition->addAttribute('span', 'data-type', 'Text');
+        $definition->addAttribute('span', 'data-id', 'Text');
+        $definition->addAttribute('span', 'data-label', 'Text');
+        $definition->addAttribute('span', 'data-mention-suggestion-char', 'Text');
+
+        return new \HTMLPurifier($config);
     }
 }
