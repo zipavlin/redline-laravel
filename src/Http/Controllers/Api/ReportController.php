@@ -200,14 +200,23 @@ class ReportController extends Controller
         ]);
 
         $target = Status::from($validated['status']);
+        $user = $this->authUser($request);
 
-        if (! $report->canUserSetStatus($this->authUser($request), $target)) {
+        if (! $report->canUserSetStatus($user, $target)) {
             abort(403, 'Invalid status transition.');
         }
 
+        $previous = Status::from($report->status);
+
         $report->update(['status' => $target->value]);
 
-        return response()->json($report->fresh()->toArray());
+        $this->assignAcceptor($report, $previous, $target, $user);
+
+        $fresh = $report->fresh();
+
+        return response()->json($fresh->toArray() + [
+            'members' => $this->memberRows($fresh),
+        ]);
     }
 
     /**
@@ -233,6 +242,40 @@ class ReportController extends Controller
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * The developer Claim action (`noticed -> progress`) records the acting
+     * user as a collaborator so the board shows who picked the report up. The
+     * author is never a member and an ineligible (pending/guest) actor is
+     * skipped; the assignment is best-effort and must never fail the status
+     * change it accompanies.
+     */
+    private function assignAcceptor(Report $report, Status $previous, Status $target, User $user): void
+    {
+        if ($previous !== Status::NOTICED || $target !== Status::PROGRESS) {
+            return;
+        }
+
+        if (! $user->isApproved || $user->isGuest || $report->isAuthoredBy($user->id)) {
+            return;
+        }
+
+        try {
+            $report->members()->syncWithoutDetaching([$user->id]);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
+     * The fresh report's members as `{id, name, initials}`, author excluded.
+     *
+     * @return array<int, array{id: string, name: string, initials: string}>
+     */
+    private function memberRows(Report $report): array
+    {
+        return $report->memberRows($report->members()->get());
+    }
 
     /**
      * Email developers/admins (except the reporter) that a new report was filed.

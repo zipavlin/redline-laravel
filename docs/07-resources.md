@@ -305,7 +305,14 @@ Change status. The `UPDATE` gate lets owners and developers through; the transit
 then constrained by role **and** the lifecycle chain - see [Status lifecycle](#status-lifecycle).
 Body: `{ "status": "new"|"noticed"|"progress"|"resolved"|"done" }`.
 
-- `200` - the updated report.
+Side effect: the developer **Claim** action (`noticed -> progress`) records the acting
+user as a member (additive + idempotent - claiming again adds no duplicate). The author is
+never added, and an ineligible (pending/guest) actor is skipped; the assignment is
+best-effort and never fails the status change. Any other transition (including a reopen
+`resolved -> progress`) touches no members.
+
+- `200` - the updated report **plus** a `members` array (`[{ id, name, initials }]`, the
+  same author-excluded projection the member endpoints return).
 - `403` - `"Invalid status transition."` when the role/lifecycle disallows it.
 - `422` - invalid status value.
 
@@ -330,12 +337,16 @@ Body: `{ "user_ids": ["<uuid>", ...] }` - required, array, **1..100** ids (each 
 up to 255 chars). Both are gated by `Operation::UPDATE` on the report (developer/admin or
 the report's author), except `DELETE` additionally lets an eligible (approved, non-guest) caller remove exactly themselves by passing only their own id; everyone else, and any other id list, gets `403`.
 
+- **The report's author is never a member** - the author is the `author` relation, while
+  `members` holds additional collaborators. An author id sent to `POST` is dropped like an
+  already-existing pair (no-op, **not** `422`), and the returned `members` list never
+  contains the author. Migration `0008` removes historical author rows.
 - `POST` is **additive + idempotent** (`syncWithoutDetaching`): only pairs that do not
   already exist are created, so re-posting the same list is a no-op, not a `409`.
 - `DELETE` is idempotent (`detach`): removing a pair that does not exist is a no-op.
 - Both return `200` with `{ "members": [ { "id", "name", "initials" }, ... ] }` - the
-  report's **full current list**, sorted by `name` then `id` (a total order), so the
-  client never has to refetch or reconcile.
+  report's **full current list** (author excluded), sorted by `name` then `id` (a total
+  order), so the client never has to refetch or reconcile.
 - Unknown ids, **pending** users, and **guest** users are not eligible -> `422`
   (`"One or more user ids are unknown."`). `DELETE` does not validate existence - an
   unknown id is simply a no-op.
@@ -638,7 +649,7 @@ Includes:
 | `screenshot` | relation / `:exists` | attributes `id,url` |
 | `video` | relation / `:exists` | attributes `id,url` |
 | `comments` | relation / `:count` / `:exists` | fixed shape: `{ id, body, created_at, author: { id, name } \| null }` |
-| `members` | relation / `:count` / `:exists` | the member pivot's users, fixed shape `{ id, name, initials }` sorted by name then id. Target name equals the Eloquent relation `members`, so `withCount`/`withExists` attach `members_count`/`members_exists` |
+| `members` | relation / `:count` / `:exists` | the member pivot's users **excluding the report's author**, fixed shape `{ id, name, initials }` sorted by name then id. Target name equals the Eloquent relation `members`, so `withCount`/`withExists` attach `members_count`/`members_exists` |
 
 Aggregates:
 
@@ -702,7 +713,8 @@ transition."`.
 
 Two implicit transitions happen outside the PATCH endpoint: viewing a `new` report as a
 developer auto-advances it to `noticed` (GET `report/{report}`), and new reports are
-created at `new`.
+created at `new`. Additionally, the PATCH Claim (`noticed -> progress`) auto-assigns the
+acting user as a member when eligible (see the status endpoint above).
 
 Status groups for querying (`Status::openValues()` / `closedValues()`): open =
 `new, noticed, progress` (group `unresolved`); closed = `resolved, done` (group

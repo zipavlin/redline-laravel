@@ -134,6 +134,46 @@ class Report extends Model
     }
 
     /**
+     * The report's author is never one of its members: the author is the
+     * `author` relation, while `members` holds additional collaborators. One
+     * predicate so the read projection and the write endpoints cannot drift.
+     */
+    public function isAuthoredBy(string $userId): bool
+    {
+        return $this->author_id !== null && $userId === $this->author_id;
+    }
+
+    /**
+     * Project attached users as `{id, name, initials}`, with the author removed
+     * (see isAuthoredBy()). The single read-side exclusion point shared by the
+     * `members` include, the member endpoints and the status response.
+     *
+     * @param  iterable<int, User>  $users
+     * @return array<int, array{id: string, name: string, initials: string}>
+     */
+    public function memberRows(iterable $users): array
+    {
+        return Members::fromUsers(
+            collect($users)->reject(fn (User $user) => $this->isAuthoredBy($user->id)),
+        );
+    }
+
+    /**
+     * Drop the author from an incoming member id list: posting the author is a
+     * no-op (like an already-existing pair), never a validation error.
+     *
+     * @param  array<int, string>  $userIds
+     * @return array<int, string>
+     */
+    public function withoutAuthor(array $userIds): array
+    {
+        return array_values(array_filter(
+            $userIds,
+            fn (string $userId) => ! $this->isAuthoredBy($userId),
+        ));
+    }
+
+    /**
      * The query grammar whitelist for this resource - see the grammar docblock
      * on QuerySchema for the wire format each entry below enables.
      */
@@ -304,7 +344,7 @@ class Report extends Model
                             return null;
                         }
 
-                        return Members::fromUsers($report->members);
+                        return $report->memberRows($report->members);
                     },
                 ),
                 // `url` reads Screenshot::$report_id and $id - both are always

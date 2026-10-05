@@ -504,3 +504,35 @@ it('lets an admin add a member', function () {
         authHeaders('admin'),
     )->assertStatus(200)->assertJsonCount(1, 'members');
 });
+
+// ---------------------------------------------------------------------------
+// Author exclusion - the author is never a member
+// ---------------------------------------------------------------------------
+
+it('treats the report author as a no-op member', function () {
+    ['report' => $report, 'author' => $author] = memberTarget();
+
+    $body = $this->postJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$author->id]],
+        authHeaders('developer'),
+    )->assertStatus(200)->json();
+
+    expect($body['members'])->toBe([])
+        ->and(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(0);
+});
+
+it('drops the author id while adding the remaining ids', function () {
+    ['report' => $report, 'author' => $author] = memberTarget();
+    $member = memberUser('Real Member', 'real-member@example.com');
+
+    $body = $this->postJson(
+        "/redline/api/report/{$report->id}/member",
+        ['user_ids' => [$author->id, $member->id]],
+        authHeaders('developer'),
+    )->assertStatus(200)->json();
+
+    expect($body['members'])->toHaveCount(1)
+        ->and($body['members'][0]['id'])->toBe($member->id)
+        ->and(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(1);
+});

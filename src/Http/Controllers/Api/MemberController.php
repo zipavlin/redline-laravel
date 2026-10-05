@@ -8,14 +8,14 @@ use Zipavlin\Redline\Enums\Operation;
 use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\User;
-use Zipavlin\Redline\Support\Members;
 
 /**
  * Report members - the write side of the report-user pivot.
  *
  * Reads (include[members], filter[member]) live on Report::querySchema();
  * these two endpoints mutate pairs and always answer with the report's full,
- * name-sorted member list so the client never has to refetch or reconcile.
+ * name-sorted member list (author excluded) so the client never has to refetch
+ * or reconcile.
  */
 class MemberController extends Controller
 {
@@ -29,7 +29,9 @@ class MemberController extends Controller
     {
         $this->checkUser($request, Operation::UPDATE, $report);
 
-        $userIds = $this->validatedUserIds($request);
+        // The author can never be a member; an author id is dropped like an
+        // already-existing pair rather than rejected.
+        $userIds = $report->withoutAuthor($this->validatedUserIds($request));
         $this->assertUsersExist($userIds);
 
         // syncWithoutDetaching inserts only the missing pairs and leaves existing
@@ -97,12 +99,12 @@ class MemberController extends Controller
     }
 
     /**
-     * The report's current members as `{id, name, initials}`.
+     * The report's current members as `{id, name, initials}`, author excluded.
      *
      * @return array<int, array{id: string, name: string, initials: string}>
      */
     private function memberRows(Report $report): array
     {
-        return Members::fromUsers($report->members()->get());
+        return $report->memberRows($report->members()->get());
     }
 }

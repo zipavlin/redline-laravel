@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\User;
 
@@ -201,4 +202,94 @@ it('returns 422 when status is not a valid value', function () {
     $this->patchJson("/redline/api/report/{$id}/status", ['status' => 'bogus'], authHeaders('developer'))
         ->assertStatus(422)
         ->assertJsonValidationErrors(['status']);
+});
+
+// ---------------------------------------------------------------------------
+// Accept side effect - auto-assign the acting user (noticed -> progress only)
+// ---------------------------------------------------------------------------
+
+it('auto-assigns the developer who accepts a report (noticed -> progress)', function () {
+    $author = makeUser('reporter');
+    $id = createReportForStatus('noticed', $author['id']);
+    $actor = makeUser('developer');
+
+    $this->patchJson(
+        "/redline/api/report/{$id}/status",
+        ['status' => 'progress'],
+        ['Authorization' => 'Bearer '.makeAuthToken($actor)],
+    )->assertStatus(200)->assertJsonPath('status', 'progress');
+
+    $members = DB::connection('redline')->table('redline_members')->where('report_id', $id);
+
+    expect($members->where('user_id', $actor['id'])->count())->toBe(1)
+        ->and($members->count())->toBe(1);
+});
+
+it('does not duplicate the member when the same developer accepts again', function () {
+    $author = makeUser('reporter');
+    $id = createReportForStatus('noticed', $author['id']);
+    $actor = makeUser('developer');
+    $url = "/redline/api/report/{$id}/status";
+    $headers = ['Authorization' => 'Bearer '.makeAuthToken($actor)];
+
+    $this->patchJson($url, ['status' => 'progress'], $headers)->assertStatus(200);
+
+    // Re-arm the report and Accept again - the assignment is additive.
+    app(Report::class)->find($id)->update(['status' => 'noticed']);
+    $this->patchJson($url, ['status' => 'progress'], $headers)->assertStatus(200);
+
+    expect(DB::connection('redline')->table('redline_members')
+        ->where('report_id', $id)->where('user_id', $actor['id'])->count())->toBe(1);
+});
+
+it('does not assign anyone when a report is reopened (resolved -> progress)', function () {
+    $author = makeUser('reporter');
+    $id = createReportForStatus('resolved', $author['id']);
+    $actor = makeUser('developer');
+
+    $this->patchJson(
+        "/redline/api/report/{$id}/status",
+        ['status' => 'progress'],
+        ['Authorization' => 'Bearer '.makeAuthToken($actor)],
+    )->assertStatus(200);
+
+    expect(DB::connection('redline')->table('redline_members')->where('report_id', $id)->count())->toBe(0);
+});
+
+it('does not assign anyone on transitions other than noticed -> progress', function () {
+    $author = makeUser('reporter');
+    $id = createReportForStatus('new', $author['id']);
+
+    $this->patchJson("/redline/api/report/{$id}/status", ['status' => 'noticed'], authHeaders('developer'))
+        ->assertStatus(200);
+
+    expect(DB::connection('redline')->table('redline_members')->where('report_id', $id)->count())->toBe(0);
+});
+
+it('never adds the author when they accept their own report', function () {
+    $author = makeUser('reporter');
+    $id = createReportForStatus('noticed', $author['id']);
+
+    $this->patchJson(
+        "/redline/api/report/{$id}/status",
+        ['status' => 'progress'],
+        ['Authorization' => 'Bearer '.makeAuthToken($author)],
+    )->assertStatus(200)->assertJsonPath('status', 'progress');
+
+    expect(DB::connection('redline')->table('redline_members')->where('report_id', $id)->count())->toBe(0);
+});
+
+it('returns the author-excluded members list in the status response', function () {
+    $author = makeUser('reporter');
+    $id = createReportForStatus('noticed', $author['id']);
+    $actor = makeUser('developer');
+
+    $body = $this->patchJson(
+        "/redline/api/report/{$id}/status",
+        ['status' => 'progress'],
+        ['Authorization' => 'Bearer '.makeAuthToken($actor)],
+    )->assertStatus(200)->json();
+
+    expect($body)->toHaveKey('members')
+        ->and(array_column($body['members'], 'id'))->toBe([$actor['id']]);
 });
