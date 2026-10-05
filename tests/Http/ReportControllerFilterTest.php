@@ -159,6 +159,102 @@ it('treats filter[status]=resolved as a superset of filter[status]=done', functi
         ->and($doneOnly[0]['status'])->toBe('done');
 });
 
+// ---------------------------------------------------------------------------
+// Priority - concrete enum values, base-row field, enum-ordered sort
+// ---------------------------------------------------------------------------
+
+it('carries priority in the base row without being asked for via include[]', function () {
+    storeReport(['location' => '/page', 'priority' => 'critical']);
+
+    $body = $this->getJson('/redline/api/report?filter[location]=/page', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect($body[0])->toHaveKeys(['id', 'status', 'priority', 'created_at'])
+        ->and($body[0]['priority'])->toBe('critical');
+});
+
+it('filters reports by a concrete priority value', function () {
+    storeReport(['location' => '/page', 'priority' => 'low']);
+    storeReport(['location' => '/page', 'priority' => 'high']);
+    storeReport(['location' => '/page', 'priority' => 'critical']);
+
+    $body = $this->getJson('/redline/api/report?filter[priority]=high', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect($body)->toHaveCount(1)
+        ->and($body[0]['priority'])->toBe('high');
+});
+
+it('filters reports by priority:in (comma-separated OR)', function () {
+    storeReport(['location' => '/page', 'priority' => 'low']);
+    storeReport(['location' => '/page', 'priority' => 'normal']);
+    storeReport(['location' => '/page', 'priority' => 'critical']);
+
+    $body = $this->getJson('/redline/api/report?filter[priority:in]=low,critical', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect(collect($body)->pluck('priority')->sort()->values()->all())->toBe(['critical', 'low']);
+});
+
+it('filters reports by priority:not (excludes the value)', function () {
+    storeReport(['location' => '/page', 'priority' => 'low']);
+    storeReport(['location' => '/page', 'priority' => 'high']);
+    storeReport(['location' => '/page', 'priority' => 'critical']);
+
+    $body = $this->getJson('/redline/api/report?filter[priority:not]=low', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect(collect($body)->pluck('priority')->sort()->values()->all())->toBe(['critical', 'high']);
+});
+
+it('rejects an unknown concrete priority value with 422', function () {
+    $this->getJson('/redline/api/report?filter[priority]=urgent', $this->devHeaders)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['filter.priority']);
+});
+
+it('rejects an unknown priority inside a priority:in list with 422', function () {
+    $this->getJson('/redline/api/report?filter[priority:in]=low,urgent', $this->devHeaders)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['filter.priority']);
+});
+
+it('counts reports per priority via aggregate[priority:count]', function () {
+    storeReport(['location' => '/page', 'priority' => 'low']);
+    storeReport(['location' => '/page', 'priority' => 'low']);
+    storeReport(['location' => '/page', 'priority' => 'critical']);
+
+    $body = $this->getJson('/redline/api/report/aggregate?aggregate[priority:count]', $this->devHeaders)
+        ->assertStatus(200)
+        ->json();
+
+    expect($body['priority']['count'])->toEqual(['low' => 2, 'critical' => 1]);
+});
+
+it('sorts by priority in enum order, not lexically', function () {
+    storeReport(['location' => '/page', 'priority' => 'normal']);
+    storeReport(['location' => '/page', 'priority' => 'critical']);
+    storeReport(['location' => '/page', 'priority' => 'low']);
+    storeReport(['location' => '/page', 'priority' => 'high']);
+
+    $desc = $this->getJson('/redline/api/report?filter[location]=/page&sort[priority]=desc', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    // A lexical sort would yield critical, high, low, normal - this must not.
+    expect(collect($desc)->pluck('priority')->all())->toBe(['critical', 'high', 'normal', 'low']);
+
+    $asc = $this->getJson('/redline/api/report?filter[location]=/page&sort[priority]=asc', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect(collect($asc)->pluck('priority')->all())->toBe(['low', 'normal', 'high', 'critical']);
+});
+
 it('defaults to newest-first when no sort is given', function () {
     $firstId = storeReport(['location' => '/page']);
     $this->travel(5)->seconds();

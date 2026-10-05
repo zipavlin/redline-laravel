@@ -119,12 +119,14 @@ Notes:
 | Submit reports / comment | ✅ | ✅ | ✅ |
 | Edit own report/comment body | ✅ | ✅ | ✅ |
 | Change report status | limited¹ | ✅ | ✅ |
+| Change report priority | limited¹ | ✅ | ✅ |
 | Move pins, upload media | own only | ✅ | ✅ |
 | Delete reports/comments | own only | own only | ✅ |
 | Manage users | ❌ | ❌ | ✅ |
 
-¹ A report owner may only Reopen (resolved → in progress) or Confirm (resolved → done);
-developers/admins drive the main lifecycle transitions.
+¹ A report owner may only Reopen (resolved → in progress) or Confirm (resolved → done),
+and may set priority on their own reports only; developers/admins drive the main lifecycle
+transitions and may set priority on any report.
 
 ---
 
@@ -175,7 +177,7 @@ php artisan redline:remove
 
 Eloquent models on a dedicated SQLite connection at
 `storage/app/redline/database/redline.db`. Requires `pdo_sqlite`. The schema
-(numbered migrations `0001`–`0006`) is created by `php artisan redline:install`.
+(numbered migrations `0001`–`0007`) is created by `php artisan redline:install`.
 
 
 ---
@@ -217,7 +219,7 @@ this repo's `public/` (committed), and published via
 composer test
 ```
 
-Current baseline: **345 passed, 0 skipped** (1034 assertions).
+Current baseline: **410 passed, 0 skipped** (1329 assertions).
 
 ---
 

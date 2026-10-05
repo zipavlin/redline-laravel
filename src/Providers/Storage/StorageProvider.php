@@ -103,6 +103,14 @@ class StorageProvider
                 'Redline database is missing the redline_members table. Run `php artisan redline:install` to migrate it.'
             );
         }
+
+        // An install predating 0007 has reports and members but not the priority
+        // column; surface the upgrade instead of letting priority reads fail at runtime.
+        if (! Schema::connection('redline')->hasColumn('redline_reports', 'priority')) {
+            throw new \RuntimeException(
+                'Redline database is missing the priority column. Run `php artisan redline:update` to migrate it.'
+            );
+        }
     }
 
     /**

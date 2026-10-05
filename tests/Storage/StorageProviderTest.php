@@ -1,5 +1,8 @@
 <?php
 
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
@@ -29,4 +32,35 @@ it('boot() throws a friendly RuntimeException when the database file is missing'
 
     expect(fn () => $this->provider->boot())
         ->toThrow(RuntimeException::class, 'Run `php artisan redline:install`');
+});
+
+// ---------------------------------------------------------------------------
+// boot() - missing priority column
+// ---------------------------------------------------------------------------
+
+it('boot() throws a friendly RuntimeException when the priority column is missing', function () {
+    $database = sys_get_temp_dir().DIRECTORY_SEPARATOR.'redline-storage-'.uniqid().'.db';
+    touch($database);
+
+    config(['database.connections.redline.database' => $database]);
+    DB::purge('redline');
+
+    Artisan::call('migrate', [
+        '--path' => dirname(__DIR__, 2).'/database/redline',
+        '--database' => 'redline',
+        '--realpath' => true,
+        '--force' => true,
+    ]);
+
+    Schema::connection('redline')->table('redline_reports', function ($table): void {
+        $table->dropIndex(['priority']);
+        $table->dropColumn('priority');
+    });
+
+    expect(fn () => $this->provider->boot())
+        ->toThrow(RuntimeException::class, 'missing the priority column');
+
+    foreach (glob($database.'*') ?: [] as $file) {
+        @unlink($file);
+    }
 });

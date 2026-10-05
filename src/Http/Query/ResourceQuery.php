@@ -187,11 +187,25 @@ final class ResourceQuery
         return $builder;
     }
 
-    /** @param  array<int, array{target: string, dir: string}>  $sort */
-    public static function applySort(Builder $builder, array $sort): Builder
+    /**
+     * @param  array<int, array{target: string, dir: string}>  $sort
+     * @param  array<string, string>  $sortExpressions  target => raw SQL fragment, for enum-ordered sorts
+     */
+    public static function applySort(Builder $builder, array $sort, array $sortExpressions = []): Builder
     {
         foreach ($sort as $s) {
-            $builder->orderBy($s['target'], $s['dir']);
+            $expression = $sortExpressions[$s['target']] ?? null;
+
+            if ($expression === null) {
+                $builder->orderBy($s['target'], $s['dir']);
+
+                continue;
+            }
+
+            // The direction is already whitelisted to asc/desc in parseSort(), and
+            // the expression is a developer-authored schema fragment (never user
+            // input), so both are safe to interpolate here.
+            $builder->orderByRaw('('.$expression.') '.$s['dir']);
         }
 
         return $builder;
@@ -258,8 +272,9 @@ final class ResourceQuery
 
     /**
      * GET /{resource} terminal - {data, meta} envelope, rows shaped by the
-     * parsed include[]. Base row is always `id`, `status`, `created_at`;
-     * everything else (including `body` and `author`) is include-gated.
+     * parsed include[]. Base row is always `id`, `status`, `created_at` plus
+     * any schema-declared additional base fields; everything else (including
+     * `body` and `author`) is include-gated.
      */
     public function list(): array
     {
@@ -273,7 +288,7 @@ final class ResourceQuery
                 $query->orderBy($column, $dir);
             }
         } else {
-            self::applySort($query, $this->parsed->sort);
+            self::applySort($query, $this->parsed->sort, $this->schema->sortExpressions);
         }
 
         if ($this->parsed->perPage === null) {
@@ -454,6 +469,10 @@ final class ResourceQuery
             'status' => $model->getAttribute('status'),
             'created_at' => $model->getAttribute('created_at'),
         ];
+
+        foreach ($this->schema->additionalBaseFields as $field) {
+            $base[$field] = $model->getAttribute($field);
+        }
 
         return $base + $this->serialize($model);
     }

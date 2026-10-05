@@ -82,6 +82,7 @@ Route::prefix(config('redline.path', 'redline').'/api')->middleware(SubstituteBi
         Route::delete('report/{report}', [ReportController::class, 'destroy']);
         Route::post('report/{report}/move', [ReportController::class, 'move']);
         Route::patch('report/{report}/status', [ReportController::class, 'status']);
+        Route::patch('report/{report}/priority', [ReportController::class, 'priority']);
 
         // Members
         Route::post('report/{report}/member', [MemberController::class, 'store']);

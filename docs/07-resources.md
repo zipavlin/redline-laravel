@@ -194,6 +194,7 @@ All report routes are protected. Route names: only the auth routes and `bootstra
 | DELETE | `/report/{report}` | `ReportController@destroy` | DELETE (own or admin) |
 | POST | `/report/{report}/move` | `ReportController@move` | UPDATE (own or developer+) |
 | PATCH | `/report/{report}/status` | `ReportController@status` | UPDATE + transition rules |
+| PATCH | `/report/{report}/priority` | `ReportController@priority` | UPDATE (own or developer+) |
 | POST | `/report/{report}/member` | `MemberController@store` | UPDATE (own or developer+) |
 | DELETE | `/report/{report}/member` | `MemberController@destroy` | UPDATE (own or developer+) or self-removal |
 | GET | `/report/{report}/comment` | `CommentController@index` | LIST |
@@ -246,6 +247,7 @@ Validation (all fields optional unless marked):
 | `pin.scroll_x` / `pin.scroll_y` | nullable numeric |
 | `element` | nullable string |
 | `browser` | nullable array |
+| `priority` | optional; `low`\|`normal`\|`high`\|`critical` (default `normal`, unknown enum value 422) |
 
 The report is created with `status: new` and attributed to the authenticated user (or the
 shared Guest user). `body` is HTML-sanitized server-side (allowlist: `p,br,strong,em,s,a,
@@ -255,7 +257,8 @@ ul,ol,li`, plus a `span` carrying only the TipTap mention attributes
 are emailed a new-report notification when a mailer is configured; the mail send is
 best-effort and never fails the request.
 
-- `201` - `{ "id", "status", "created_at", ... }` the fresh report (full model).
+- `201` - `{ "id", "status", "priority", "created_at", ... }` the fresh report (full model).
+  `priority` is the submitted value, or `"normal"` when omitted.
 
 ### `GET /report/{report}`
 
@@ -305,6 +308,16 @@ Body: `{ "status": "new"|"noticed"|"progress"|"resolved"|"done" }`.
 - `200` - the updated report.
 - `403` - `"Invalid status transition."` when the role/lifecycle disallows it.
 - `422` - invalid status value.
+
+### `PATCH /report/{report}/priority`
+
+Set priority. The `UPDATE` gate lets owners and developers through; unlike status there is
+**no** transition graph - any of `low|normal|high|critical` is settable at any time. Body:
+`{ "priority": "low"|"normal"|"high"|"critical" }`.
+
+- `200` - the updated report.
+- `403` - caller is neither developer+ nor the report owner.
+- `422` - missing or unknown enum value.
 
 ### `POST/DELETE /report/{report}/member`
 
@@ -468,7 +481,7 @@ Field semantics:
 ## Query grammar
 
 The canonical reference is the docblock on `Zipavlin\Redline\Http\Query\QuerySchema`
-(lines 5–110); the text below reproduces it and pins the per-resource whitelists. Every
+(lines 5–112); the text below reproduces it and pins the per-resource whitelists. Every
 collection endpoint accepts the same parameter groups. The shape is always
 `<group>[<target>[:<operator>]]=<value>`, where `<target>` is an attribute, a
 relationship, or `relationship.attribute`. Omitting `:<operator>` means equality.
@@ -502,7 +515,7 @@ GET /redline/api/report
 | Group | Meaning |
 |---|---|
 | `filter` | Constrain rows. Whitelisted per resource (`Report::querySchema()`). |
-| `include` | Add attributes/relationships to **every** row. This is how the widget and dashboard get different payloads from one endpoint - the widget asks for `pin,element`, the dashboard for `comments:count,screenshot:exists`. There is no implicit per-client mode. Base row is always `id`, `status`, `created_at`; everything else - including `body` and `author` - is include-gated, same as any other field. |
+| `include` | Add attributes/relationships to **every** row. This is how the widget and dashboard get different payloads from one endpoint - the widget asks for `pin,element`, the dashboard for `comments:count,screenshot:exists`. There is no implicit per-client mode. Base row is always `id`, `status`, `created_at` (plus any resource-specific base fields such as report `priority`); everything else - including `body` and `author` - is include-gated, same as any other field. |
 | `sort` | `sort[<attribute>]=asc\|desc`. Repeat for multi-key; first key wins ties. Falls back to the resource's `$defaultSort` when omitted. |
 | `paginate` | `paginate[per_page]` and `paginate[page]`. Omitting `per_page` **entirely** returns every matching row (bounded only by the optional `config('redline.api.max_rows')` ceiling, off by default) - an EXPLICIT `per_page` is still capped at 100. |
 
@@ -597,6 +610,7 @@ Filters:
 | Target | Operators | Notes |
 |---|---|---|
 | `status` | string set (`eq`,`not`,`like`,`in`,`not_in`,`null`,`not_null`) | group or concrete value; group expansion at parse time |
+| `priority` | string set (`eq`,`not`,`like`,`in`,`not_in`,`null`,`not_null`) | concrete values only (`low`,`normal`,`high`,`critical`) - no value groups; unknown value 422 |
 | `body` | string set | column filter |
 | `created_at` | date set (adds `from`,`to`,`gt`,`gte`,`lt`,`lte`) | inclusive bounds |
 | `location` | string set | column filter |
@@ -608,8 +622,10 @@ Filters:
 | `video` | `exists` only | has/doesn't have a video |
 | `comments` | `exists` only | has/doesn't have comments |
 
-Sortable: `created_at`, `status`, `location`. Default sort: `created_at` desc, `id` desc
-(the `id` tiebreaker makes it a total order so pagination pages never overlap/skip).
+Sortable: `created_at`, `status`, `priority` (enum-ordered via a `CASE` expression, so
+`sort[priority]=desc` puts `critical` first rather than sorting lexically), `location`.
+Default sort: `created_at` desc, `id` desc (the `id` tiebreaker makes it a total order so
+pagination pages never overlap/skip).
 
 Includes:
 
@@ -629,10 +645,12 @@ Aggregates:
 | Target | Operators | Notes |
 |---|---|---|
 | `status` | `count` | value list + groups, e.g. `aggregate[status:count]=unresolved,resolved` |
+| `priority` | `count` | plain-column: per-value counts, e.g. `aggregate[priority:count]` (and the bucketed `aggregate[priority:count]=low,high` form) |
 | `location` | `count`, `unique` | `count` → per-distinct-value counts; `unique` → distinct `location` values, ordered |
 | `author` | `count`, `unique` | `count` with no value list → `{ "<author-uuid>": count }`; `unique` → `[{ "id", "name" }]` ordered by name |
 
-`group_by[]` column must be a plain-column aggregate target (`status` or `location`).
+`group_by[]` column must be a plain-column aggregate target (`status`, `priority` or
+`location`).
 
 ### User resource whitelist (`User::querySchema()`)
 
@@ -712,7 +730,7 @@ All error responses are JSON unless noted. The two envelope shapes:
 | `403` | forbidden: `"Forbidden."`, `"Admin access required."`, `"Invalid status transition."`, `"Feature disabled."`, `"Registration not allowed."`, `"Forbidden origin."` (guest) |
 | `404` | not found, including parent/child mismatch on nested routes and missing media rows |
 | `409` | **duplicate media** - `{ "message": "Screenshot already exists for this report." }` / `{ "message": "Video already exists for this report." }` (one media per report) |
-| `422` | validation / grammar - never a silent ignore: unknown or non-whitelisted group, target, operator, or attribute; invalid operator for a field; `per_page` outside 1–100; `page` < 1; unknown status/group; two `group_by` columns; last-admin protection on user endpoints |
+| `422` | validation / grammar - never a silent ignore: unknown or non-whitelisted group, target, operator, or attribute; invalid operator for a field; `per_page` outside 1–100; `page` < 1; unknown status/group; unknown priority value; two `group_by` columns; last-admin protection on user endpoints |
 | `429` | rate limit - `redline-auth`, `redline-bootstrap`, or `redline-guest`; response includes `Retry-After` |
 
 Grammar-specific guarantees (from `ResourceQuery`): violations are collected across the

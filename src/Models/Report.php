@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Zipavlin\Redline\Enums\Operation;
+use Zipavlin\Redline\Enums\Priority;
 use Zipavlin\Redline\Enums\QueryOperator;
 use Zipavlin\Redline\Enums\Status;
 use Zipavlin\Redline\Http\Query\AggregateField;
@@ -32,6 +33,7 @@ class Report extends Model
     protected $fillable = [
         'id',
         'status',
+        'priority',
         'author_id',
         'url',
         'location',
@@ -172,6 +174,33 @@ class Report extends Model
                         return array_values(array_unique($resolved));
                     },
                 ),
+                // Closed-enum filter with concrete values only - unlike `status` there
+                // is no group expansion, so each value is validated against Priority at
+                // parse time and an unknown one lands in the collect-all-errors bag as
+                // `filter.priority` (422). Column-based (rather than a whereIn resolver
+                // like `status`) so `:not`/`:not_in` negate a single value/row as expected.
+                'priority' => new FilterField(
+                    operators: QueryOperator::string(),
+                    column: 'priority',
+                    normalize: function (mixed $value, string $operator, array &$errors): mixed {
+                        if (in_array($operator, [QueryOperator::NULL->value, QueryOperator::NOT_NULL->value], true)) {
+                            return $value;
+                        }
+
+                        $multiple = in_array($operator, [QueryOperator::IN->value, QueryOperator::NOT_IN->value], true);
+                        $values = $multiple ? ResourceQuery::splitList($value) : [$value];
+
+                        foreach ($values as $v) {
+                            if (Priority::tryFrom((string) $v) === null) {
+                                $errors['filter.priority'] = ["Unknown priority value [{$v}]."];
+
+                                return null;
+                            }
+                        }
+
+                        return $multiple ? array_values(array_unique($values)) : $value;
+                    },
+                ),
                 'body' => new FilterField(operators: QueryOperator::string(), column: 'body'),
                 'created_at' => new FilterField(operators: QueryOperator::date(), column: 'created_at'),
                 'location' => new FilterField(operators: QueryOperator::string(), column: 'location'),
@@ -238,7 +267,7 @@ class Report extends Model
                 'video' => new FilterField(operators: [QueryOperator::EXISTS], relation: 'video'),
                 'comments' => new FilterField(operators: [QueryOperator::EXISTS], relation: 'comments'),
             ],
-            sortable: ['created_at', 'status', 'location'],
+            sortable: ['created_at', 'status', 'location', 'priority'],
             includable: [
                 'title' => new IncludeField(column: 'title'),
                 'body' => new IncludeField(column: 'body'),
@@ -320,6 +349,7 @@ class Report extends Model
             // overlap or skip rows between requests.
             aggregates: [
                 'status' => new AggregateField(operators: [QueryOperator::COUNT], column: 'status'),
+                'priority' => new AggregateField(operators: [QueryOperator::COUNT], column: 'priority'),
                 'location' => new AggregateField(
                     operators: [QueryOperator::COUNT, QueryOperator::UNIQUE],
                     column: 'location',
@@ -343,6 +373,14 @@ class Report extends Model
                 ),
             ],
             defaultSort: ['created_at' => 'desc', 'id' => 'desc'],
+            // Enum-ordered, not lexical: descending must put critical first. The
+            // CASE fragment mirrors Priority's declaration order, with `normal` (1)
+            // as the fallback for any unrecognised stored value.
+            sortExpressions: [
+                'priority' => "CASE priority WHEN 'low' THEN 0 WHEN 'normal' THEN 1 WHEN 'high' THEN 2 WHEN 'critical' THEN 3 ELSE 1 END",
+            ],
+            // `priority` is part of the report's base row, not include-gated.
+            additionalBaseFields: ['priority'],
         );
     }
 }

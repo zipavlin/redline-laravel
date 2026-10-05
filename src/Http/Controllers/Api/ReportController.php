@@ -8,6 +8,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Zipavlin\Redline\Enums\Operation;
+use Zipavlin\Redline\Enums\Priority;
 use Zipavlin\Redline\Enums\QueryCapability;
 use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Enums\Status;
@@ -104,6 +105,7 @@ class ReportController extends Controller
             'pin.scroll_y' => ['nullable', 'numeric'],
             'element' => ['nullable', 'string'],
             'browser' => ['nullable', 'array'],
+            'priority' => ['sometimes', Rule::enum(Priority::class)],
         ]);
 
         $validated['body'] = $this->sanitizeHtml($validated['body']);
@@ -204,6 +206,26 @@ class ReportController extends Controller
         }
 
         $report->update(['status' => $target->value]);
+
+        return response()->json($report->fresh()->toArray());
+    }
+
+    /**
+     * PATCH /redline/api/report/{report}/priority
+     *
+     * Set the priority. The UPDATE gate lets owners and developers through.
+     * Unlike status there is no transition graph - any of the four levels is
+     * settable at any time.
+     */
+    public function priority(Request $request, Report $report): JsonResponse
+    {
+        $this->checkUser($request, Operation::UPDATE, $report);
+
+        $validated = $request->validate([
+            'priority' => ['required', Rule::enum(Priority::class)],
+        ]);
+
+        $report->update(['priority' => $validated['priority']]);
 
         return response()->json($report->fresh()->toArray());
     }

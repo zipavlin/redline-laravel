@@ -123,6 +123,8 @@ it('serves the widget member-picker query to a reporter', function () {
     expect($body)->toHaveCount(4)
         ->and($body[0])->toHaveKeys(['id', 'status', 'created_at', 'name', 'initials'])
         ->and($body[0])->not->toHaveKey('email')
+        // Report-specific base fields (priority) must not leak onto other resources.
+        ->and($body[0])->not->toHaveKey('priority')
         ->and(collect($body)->pluck('status')->unique()->all())->toBe(['approved'])
         ->and(collect($body)->pluck('name')->all())->toBe($expectedNames);
 });

@@ -43,10 +43,13 @@ namespace Zipavlin\Redline\Http\Query;
  *             dashboard get different payloads from one endpoint - the widget asks for
  *             `pin,element`, the dashboard for `comments:count,screenshot:exists`. There
  *             is no implicit per-client mode. Base row is always `id`, `status`,
- *             `created_at`; everything else - including `body` and `author` - is
+ *             `created_at`, plus any resource-specific base fields (e.g. a report's
+ *             `priority`); everything else - including `body` and `author` - is
  *             include-gated, same as any other field.
  *   sort      `sort[<attribute>]=asc|desc`. Repeat for multi-key; first key wins ties.
- *             Falls back to the resource's $defaultSort when omitted.
+ *             Falls back to the resource's $defaultSort when omitted. An enum column
+ *             can declare a semantic order via $sortExpressions, so `sort[priority]=desc`
+ *             yields critical -> high -> normal -> low instead of a lexical sort.
  *   paginate  `paginate[per_page]` and `paginate[page]`. Mirrors the `meta` envelope.
  *             Omitting `per_page` entirely returns every matching row (bounded only by
  *             the optional `config('redline.api.max_rows')` ceiling, off by default) -
@@ -115,6 +118,14 @@ final class QuerySchema
      * @param  array<string, IncludeField>  $includable  keyed by the public include[] target name (e.g. 'author', 'comments')
      * @param  array<string, AggregateField>  $aggregates  keyed by the public aggregate target name
      * @param  array<string, string>  $defaultSort  column => 'asc'|'desc', applied when the caller sends no sort[] at all
+     * @param  array<string, string>  $sortExpressions  public sort target => raw SQL fragment used in place of a plain
+     *                                                  column. Lets an enum column sort by its semantic order rather
+     *                                                  than lexically (e.g. `priority`: `CASE priority WHEN ... END`).
+     *                                                  The target must still be whitelisted in $sortable.
+     * @param  array<int, string>  $additionalBaseFields  extra columns serialized on every grammar row in addition to
+     *                                                    the canonical `id`/`status`/`created_at` (e.g. a report's
+     *                                                    `priority`). Only for always-present fields; anything
+     *                                                    include-gated belongs in $includable.
      */
     public function __construct(
         public readonly array $filters,
@@ -122,6 +133,8 @@ final class QuerySchema
         public readonly array $includable,
         public readonly array $aggregates = [],
         public readonly array $defaultSort = [],
+        public readonly array $sortExpressions = [],
+        public readonly array $additionalBaseFields = [],
     ) {}
 
     /**
