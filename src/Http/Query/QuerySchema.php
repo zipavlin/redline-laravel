@@ -49,7 +49,9 @@ namespace Zipavlin\Redline\Http\Query;
  *   sort      `sort[<attribute>]=asc|desc`. Repeat for multi-key; first key wins ties.
  *             Falls back to the resource's $defaultSort when omitted. An enum column
  *             can declare a semantic order via $sortExpressions, so `sort[priority]=desc`
- *             yields critical -> high -> normal -> low instead of a lexical sort.
+ *             yields critical -> high -> normal -> low instead of a lexical sort. A
+ *             column declared in $sortNullsLast sorts its NULL values last in both
+ *             directions (a missing deadline is never the most urgent).
  *   paginate  `paginate[per_page]` and `paginate[page]`. Mirrors the `meta` envelope.
  *             Omitting `per_page` entirely returns every matching row (bounded only by
  *             the optional `config('redline.api.max_rows')` ceiling, off by default) -
@@ -126,6 +128,11 @@ final class QuerySchema
      *                                                    the canonical `id`/`status`/`created_at` (e.g. a report's
      *                                                    `priority`). Only for always-present fields; anything
      *                                                    include-gated belongs in $includable.
+     * @param  array<int, string>  $sortNullsLast  sortable targets that must put an unset/NULL value LAST in both
+     *                                             directions (e.g. a report's `due_at` - a missing deadline is never
+     *                                             the most urgent). SQLite and MySQL disagree on where a plain
+     *                                             ORDER BY places NULLs, so ResourceQuery emits an explicit leading
+     *                                             `(<col> IS NULL) ASC` co-term instead of relying on driver defaults.
      */
     public function __construct(
         public readonly array $filters,
@@ -135,6 +142,7 @@ final class QuerySchema
         public readonly array $defaultSort = [],
         public readonly array $sortExpressions = [],
         public readonly array $additionalBaseFields = [],
+        public readonly array $sortNullsLast = [],
     ) {}
 
     /**

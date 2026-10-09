@@ -18,6 +18,7 @@ use Zipavlin\Redline\Http\Query\FilterField;
 use Zipavlin\Redline\Http\Query\IncludeField;
 use Zipavlin\Redline\Http\Query\QuerySchema;
 use Zipavlin\Redline\Http\Query\ResourceQuery;
+use Zipavlin\Redline\Models\Casts\UtcDateTime;
 use Zipavlin\Redline\Models\Concerns\HasQuerySchema;
 use Zipavlin\Redline\Support\Members;
 
@@ -34,6 +35,7 @@ class Report extends Model
         'id',
         'status',
         'priority',
+        'due_at',
         'author_id',
         'url',
         'location',
@@ -46,6 +48,10 @@ class Report extends Model
     protected $casts = [
         'pin' => 'array',
         'browser' => 'array',
+        // The column holds a naive UTC wall clock; see UtcDateTime. The built-in
+        // 'datetime' cast reads it in the host's app.timezone and shifts the
+        // serialized instant on any non-UTC host.
+        'due_at' => UtcDateTime::class,
     ];
 
     /**
@@ -241,8 +247,59 @@ class Report extends Model
                         return $multiple ? array_values(array_unique($values)) : $value;
                     },
                 ),
+                // Closed-enum filter over the triage deadline state, not the raw
+                // column: `due` is a *derived* state computed against now(), so it
+                // resolves to a predicate rather than a column comparison. The urgency
+                // states only match open statuses (a resolved report's stale deadline
+                // is noise); `none` is the undated state regardless of status. Only a
+                // concrete value is accepted - an unknown one feeds the
+                // collect-all-errors bag as `filter.due` (422).
+                'due' => new FilterField(
+                    operators: [QueryOperator::EQ],
+                    normalize: function (mixed $value, string $operator, array &$errors): mixed {
+                        $normalized = match ((string) $value) {
+                            'overdue', 'due_soon', 'none' => (string) $value,
+                            default => null,
+                        };
+
+                        if ($normalized === null) {
+                            $errors['filter.due'] = ["Unknown due value [{$value}]. Use [overdue], [due_soon] or [none]."];
+                        }
+
+                        return $normalized;
+                    },
+                    resolver: function (Builder $query, string $operator, mixed $value): void {
+                        // `none` is deliberately NOT status-scoped: only the urgency
+                        // states mean "unresolved and pressing", while a report with no
+                        // deadline is simply undated whatever its status - a resolved
+                        // report lacking due_at must still match. Return before the
+                        // open-status scoping below so neither whereNotNull nor the
+                        // status whereIn is applied.
+                        if ($value === 'none') {
+                            $query->whereNull('due_at');
+
+                            return;
+                        }
+
+                        // Compare against UTC explicitly: due_at is always stored in UTC,
+                        // so the wall clock now() would otherwise bind in the host's
+                        // app timezone and shift the overdue/due-soon boundary.
+                        $now = now()->utc();
+
+                        $query->whereNotNull('due_at')->whereIn('status', Status::openValues());
+
+                        if ($value === 'overdue') {
+                            $query->where('due_at', '<', $now);
+
+                            return;
+                        }
+
+                        $query->where('due_at', '>=', $now)->where('due_at', '<', $now->copy()->addDay());
+                    },
+                ),
                 'body' => new FilterField(operators: QueryOperator::string(), column: 'body'),
                 'created_at' => new FilterField(operators: QueryOperator::date(), column: 'created_at'),
+                'due_at' => new FilterField(operators: QueryOperator::date(), column: 'due_at'),
                 'location' => new FilterField(operators: QueryOperator::string(), column: 'location'),
                 // Relation filter: `filter[author]=<uuid>` / `filter[author.id:in]=a,b`
                 // (eq/in on the FK), `filter[author:exists]`, and `filter[author.name:like]`
@@ -307,7 +364,7 @@ class Report extends Model
                 'video' => new FilterField(operators: [QueryOperator::EXISTS], relation: 'video'),
                 'comments' => new FilterField(operators: [QueryOperator::EXISTS], relation: 'comments'),
             ],
-            sortable: ['created_at', 'status', 'location', 'priority'],
+            sortable: ['created_at', 'status', 'location', 'priority', 'due_at'],
             includable: [
                 'title' => new IncludeField(column: 'title'),
                 'body' => new IncludeField(column: 'body'),
@@ -419,8 +476,10 @@ class Report extends Model
             sortExpressions: [
                 'priority' => "CASE priority WHEN 'low' THEN 0 WHEN 'normal' THEN 1 WHEN 'high' THEN 2 WHEN 'critical' THEN 3 ELSE 1 END",
             ],
-            // `priority` is part of the report's base row, not include-gated.
-            additionalBaseFields: ['priority'],
+            // `priority` and `due_at` are part of the report's base row, not include-gated.
+            additionalBaseFields: ['priority', 'due_at'],
+            // A missing deadline must never sort before a real one; see applySort().
+            sortNullsLast: ['due_at'],
         );
     }
 }

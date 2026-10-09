@@ -5,6 +5,7 @@ namespace Zipavlin\Redline\Http\Controllers\Api;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Zipavlin\Redline\Enums\Operation;
@@ -106,7 +107,12 @@ class ReportController extends Controller
             'element' => ['nullable', 'string'],
             'browser' => ['nullable', 'array'],
             'priority' => ['sometimes', Rule::enum(Priority::class)],
+            'due_at' => ['sometimes', 'nullable', 'date'],
         ]);
+
+        if (array_key_exists('due_at', $validated)) {
+            $validated['due_at'] = $this->normalizeDueAt($validated['due_at']);
+        }
 
         $validated['body'] = $this->sanitizeHtml($validated['body']);
 
@@ -239,9 +245,40 @@ class ReportController extends Controller
         return response()->json($report->fresh()->toArray());
     }
 
+    /**
+     * PATCH /redline/api/report/{report}/due_at
+     *
+     * Set or clear the triage deadline. The UPDATE gate lets owners and developers
+     * through, like priority. The field is `present` (an absent key is a 422) but
+     * `nullable`: a timestamp sets the deadline, an explicit `null` clears it. Any
+     * accepted RFC3339 offset is normalized to UTC before it touches storage, so the
+     * client's local wall clock is only ever a wire format.
+     */
+    public function dueAt(Request $request, Report $report): JsonResponse
+    {
+        $this->checkUser($request, Operation::UPDATE, $report);
+
+        $validated = $request->validate([
+            'due_at' => ['present', 'nullable', 'date'],
+        ]);
+
+        $report->update(['due_at' => $this->normalizeDueAt($validated['due_at'])]);
+
+        return response()->json($report->fresh()->toArray());
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Parse an accepted RFC3339-style timestamp into the UTC instant stored in the
+     * deadline column. A null passes straight through so "clear" stays a no-op.
+     */
+    private function normalizeDueAt(mixed $dueAt): ?Carbon
+    {
+        return $dueAt === null ? null : Carbon::parse((string) $dueAt)->utc();
+    }
 
     /**
      * The developer Claim action (`noticed -> progress`) records the acting

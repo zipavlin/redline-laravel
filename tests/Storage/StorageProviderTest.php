@@ -64,3 +64,34 @@ it('boot() throws a friendly RuntimeException when the priority column is missin
         @unlink($file);
     }
 });
+
+// ---------------------------------------------------------------------------
+// boot() - missing due_at column
+// ---------------------------------------------------------------------------
+
+it('boot() throws a friendly RuntimeException when the due_at column is missing', function () {
+    $database = sys_get_temp_dir().DIRECTORY_SEPARATOR.'redline-storage-'.uniqid().'.db';
+    touch($database);
+
+    config(['database.connections.redline.database' => $database]);
+    DB::purge('redline');
+
+    Artisan::call('migrate', [
+        '--path' => dirname(__DIR__, 2).'/database/redline',
+        '--database' => 'redline',
+        '--realpath' => true,
+        '--force' => true,
+    ]);
+
+    Schema::connection('redline')->table('redline_reports', function ($table): void {
+        $table->dropIndex(['due_at']);
+        $table->dropColumn('due_at');
+    });
+
+    expect(fn () => $this->provider->boot())
+        ->toThrow(RuntimeException::class, 'missing the due_at column');
+
+    foreach (glob($database.'*') ?: [] as $file) {
+        @unlink($file);
+    }
+});

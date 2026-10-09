@@ -190,11 +190,23 @@ final class ResourceQuery
     /**
      * @param  array<int, array{target: string, dir: string}>  $sort
      * @param  array<string, string>  $sortExpressions  target => raw SQL fragment, for enum-ordered sorts
+     * @param  array<int, string>  $sortNullsLast  sortable targets whose NULL values must sort last in both directions
      */
-    public static function applySort(Builder $builder, array $sort, array $sortExpressions = []): Builder
+    public static function applySort(Builder $builder, array $sort, array $sortExpressions = [], array $sortNullsLast = []): Builder
     {
         foreach ($sort as $s) {
             $expression = $sortExpressions[$s['target']] ?? null;
+
+            if (in_array($s['target'], $sortNullsLast, true)) {
+                // A deadline column must never put "no deadline" first. SQLite and MySQL
+                // disagree on where a plain ORDER BY places NULLs, so emit a leading
+                // `(<col> IS NULL) ASC` co-term: always ASC, so NULLs land last in BOTH
+                // directions without depending on driver behaviour. The column/expression
+                // is a developer-authored schema fragment (never user input), so it is
+                // safe to interpolate.
+                $nullKey = $expression === null ? $s['target'] : '('.$expression.')';
+                $builder->orderByRaw('('.$nullKey.' IS NULL) ASC');
+            }
 
             if ($expression === null) {
                 $builder->orderBy($s['target'], $s['dir']);
@@ -288,7 +300,7 @@ final class ResourceQuery
                 $query->orderBy($column, $dir);
             }
         } else {
-            self::applySort($query, $this->parsed->sort, $this->schema->sortExpressions);
+            self::applySort($query, $this->parsed->sort, $this->schema->sortExpressions, $this->schema->sortNullsLast);
         }
 
         if ($this->parsed->perPage === null) {

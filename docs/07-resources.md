@@ -195,6 +195,7 @@ All report routes are protected. Route names: only the auth routes and `bootstra
 | POST | `/report/{report}/move` | `ReportController@move` | UPDATE (own or developer+) |
 | PATCH | `/report/{report}/status` | `ReportController@status` | UPDATE + transition rules |
 | PATCH | `/report/{report}/priority` | `ReportController@priority` | UPDATE (own or developer+) |
+| PATCH | `/report/{report}/due_at` | `ReportController@dueAt` | UPDATE (own or developer+) |
 | POST | `/report/{report}/member` | `MemberController@store` | UPDATE (own or developer+) |
 | DELETE | `/report/{report}/member` | `MemberController@destroy` | UPDATE (own or developer+) or self-removal |
 | GET | `/report/{report}/comment` | `CommentController@index` | LIST |
@@ -248,6 +249,7 @@ Validation (all fields optional unless marked):
 | `element` | nullable string |
 | `browser` | nullable array |
 | `priority` | optional; `low`\|`normal`\|`high`\|`critical` (default `normal`, unknown enum value 422) |
+| `due_at` | optional; any RFC3339 timestamp, normalized to UTC server-side (`null`/omitted → no deadline) |
 
 The report is created with `status: new` and attributed to the authenticated user (or the
 shared Guest user). `body` is HTML-sanitized server-side (allowlist: `p,br,strong,em,s,a,
@@ -257,8 +259,9 @@ ul,ol,li`, plus a `span` carrying only the TipTap mention attributes
 are emailed a new-report notification when a mailer is configured; the mail send is
 best-effort and never fails the request.
 
-- `201` - `{ "id", "status", "priority", "created_at", ... }` the fresh report (full model).
-  `priority` is the submitted value, or `"normal"` when omitted.
+- `201` - `{ "id", "status", "priority", "due_at", "created_at", ... }` the fresh report (full model).
+  `priority` is the submitted value, or `"normal"` when omitted; `due_at` is the deadline
+  normalized to UTC, or `null` when omitted.
 
 ### `GET /report/{report}`
 
@@ -325,6 +328,25 @@ Set priority. The `UPDATE` gate lets owners and developers through; unlike statu
 - `200` - the updated report.
 - `403` - caller is neither developer+ nor the report owner.
 - `422` - missing or unknown enum value.
+
+### `PATCH /report/{report}/due_at`
+
+Set or clear the triage deadline. The `UPDATE` gate lets owners and developers through (the
+same gate priority uses). Body: `{ "due_at": <RFC3339> | null }`.
+
+| Field | Rules |
+|---|---|
+| `due_at` | required key; a valid date, or explicit `null` to clear |
+
+An accepted timestamp is normalized to UTC before it is stored, so the wire may carry any
+offset. It is stored as UTC and serialized as the true UTC instant regardless of the host
+application's timezone. The key must be present (an absent `due_at` is a `422`); an explicit
+`null` clears an existing deadline. Unlike status there is no transition graph - unlike
+priority there is no default, so an unset deadline stays `null`.
+
+- `200` - the updated report. `due_at` is the normalized UTC instant, or `null` when cleared.
+- `403` - caller is neither developer+ nor the report owner.
+- `422` - `due_at` is absent or is not a valid date.
 
 ### `POST/DELETE /report/{report}/member`
 
@@ -526,7 +548,7 @@ GET /redline/api/report
 | Group | Meaning |
 |---|---|
 | `filter` | Constrain rows. Whitelisted per resource (`Report::querySchema()`). |
-| `include` | Add attributes/relationships to **every** row. This is how the widget and dashboard get different payloads from one endpoint - the widget asks for `pin,element`, the dashboard for `comments:count,screenshot:exists`. There is no implicit per-client mode. Base row is always `id`, `status`, `created_at` (plus any resource-specific base fields such as report `priority`); everything else - including `body` and `author` - is include-gated, same as any other field. |
+| `include` | Add attributes/relationships to **every** row. This is how the widget and dashboard get different payloads from one endpoint - the widget asks for `pin,element`, the dashboard for `comments:count,screenshot:exists`. There is no implicit per-client mode. Base row is always `id`, `status`, `created_at` (plus any resource-specific base fields such as report `priority` and `due_at`); everything else - including `body` and `author` - is include-gated, same as any other field. |
 | `sort` | `sort[<attribute>]=asc\|desc`. Repeat for multi-key; first key wins ties. Falls back to the resource's `$defaultSort` when omitted. |
 | `paginate` | `paginate[per_page]` and `paginate[page]`. Omitting `per_page` **entirely** returns every matching row (bounded only by the optional `config('redline.api.max_rows')` ceiling, off by default) - an EXPLICIT `per_page` is still capped at 100. |
 
@@ -622,6 +644,8 @@ Filters:
 |---|---|---|
 | `status` | string set (`eq`,`not`,`like`,`in`,`not_in`,`null`,`not_null`) | group or concrete value; group expansion at parse time |
 | `priority` | string set (`eq`,`not`,`like`,`in`,`not_in`,`null`,`not_null`) | concrete values only (`low`,`normal`,`high`,`critical`) - no value groups; unknown value 422 |
+| `due_at` | date set (`eq`,`not`,`like`,`from`,`to`,`gt`,`gte`,`lt`,`lte`,`null`,`not_null`) | raw deadline column, stored UTC. `filter[due_at:null]=1` is the "no deadline" query; `:from`/`:to` are inclusive bounds |
+| `due` | `eq` only | virtual deadline state. `overdue` (deadline `< now`) and `due_soon` (deadline in `[now, now+24h)`) are **open reports only** - a resolved/done report's stale deadline never matches. `none` is the undated state (`whereNull('due_at')`) and is deliberately **not** status-scoped: it matches a report of any status that has no deadline. Any other value 422 |
 | `body` | string set | column filter |
 | `created_at` | date set (adds `from`,`to`,`gt`,`gte`,`lt`,`lte`) | inclusive bounds |
 | `location` | string set | column filter |
@@ -634,7 +658,9 @@ Filters:
 | `comments` | `exists` only | has/doesn't have comments |
 
 Sortable: `created_at`, `status`, `priority` (enum-ordered via a `CASE` expression, so
-`sort[priority]=desc` puts `critical` first rather than sorting lexically), `location`.
+`sort[priority]=desc` puts `critical` first rather than sorting lexically), `location`, and
+`due_at` (NULL deadlines always sort **last**, in both directions - a missing deadline is
+never the most urgent).
 Default sort: `created_at` desc, `id` desc (the `id` tiebreaker makes it a total order so
 pagination pages never overlap/skip).
 
@@ -742,7 +768,7 @@ All error responses are JSON unless noted. The two envelope shapes:
 | `403` | forbidden: `"Forbidden."`, `"Admin access required."`, `"Invalid status transition."`, `"Feature disabled."`, `"Registration not allowed."`, `"Forbidden origin."` (guest) |
 | `404` | not found, including parent/child mismatch on nested routes and missing media rows |
 | `409` | **duplicate media** - `{ "message": "Screenshot already exists for this report." }` / `{ "message": "Video already exists for this report." }` (one media per report) |
-| `422` | validation / grammar - never a silent ignore: unknown or non-whitelisted group, target, operator, or attribute; invalid operator for a field; `per_page` outside 1–100; `page` < 1; unknown status/group; unknown priority value; two `group_by` columns; last-admin protection on user endpoints |
+| `422` | validation / grammar - never a silent ignore: unknown or non-whitelisted group, target, operator, or attribute; invalid operator for a field; `per_page` outside 1–100; `page` < 1; unknown status/group; unknown priority value; unknown due state; two `group_by` columns; last-admin protection on user endpoints |
 | `429` | rate limit - `redline-auth`, `redline-bootstrap`, or `redline-guest`; response includes `Retry-After` |
 
 Grammar-specific guarantees (from `ResourceQuery`): violations are collected across the

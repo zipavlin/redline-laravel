@@ -120,13 +120,14 @@ Notes:
 | Edit own report/comment body | ✅ | ✅ | ✅ |
 | Change report status | limited¹ | ✅ | ✅ |
 | Change report priority | limited¹ | ✅ | ✅ |
+| Set due date | limited¹ | ✅ | ✅ |
 | Move pins, upload media | own only | ✅ | ✅ |
 | Delete reports/comments | own only | own only | ✅ |
 | Manage users | ❌ | ❌ | ✅ |
 
 ¹ A report owner may only Reopen (resolved → in progress) or Confirm (resolved → done),
-and may set priority on their own reports only; developers/admins drive the main lifecycle
-transitions and may set priority on any report.
+and may set priority or a due date on their own reports only; developers/admins drive the
+main lifecycle transitions and may set priority or a due date on any report.
 
 ---
 

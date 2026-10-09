@@ -111,6 +111,15 @@ class StorageProvider
                 'Redline database is missing the priority column. Run `php artisan redline:update` to migrate it.'
             );
         }
+
+        // Same upgrade guard for 0009's due_at - it is a serialized base row field,
+        // so a missing column would otherwise break every report read, not just ones
+        // that filter on deadlines.
+        if (! Schema::connection('redline')->hasColumn('redline_reports', 'due_at')) {
+            throw new \RuntimeException(
+                'Redline database is missing the due_at column. Run `php artisan redline:update` to migrate it.'
+            );
+        }
     }
 
     /**

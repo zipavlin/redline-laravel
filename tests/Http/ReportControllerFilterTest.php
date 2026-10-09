@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Carbon;
 use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\User;
 
@@ -388,6 +389,163 @@ it('rejects an unknown include token with 422', function () {
 
 it('rejects a non-sortable attribute with 422', function () {
     $this->getJson('/redline/api/report?sort[body]=desc', $this->devHeaders)->assertStatus(422);
+});
+
+// ---------------------------------------------------------------------------
+// Due dates - virtual `due` state filter, raw `due_at` date filter, nulls-last sort
+// ---------------------------------------------------------------------------
+
+it('carries due_at in the base row without being asked for via include[]', function () {
+    storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-06T09:00:00Z')]);
+
+    $body = $this->getJson('/redline/api/report?filter[location]=/page', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect($body[0])->toHaveKeys(['id', 'status', 'priority', 'due_at', 'created_at'])
+        ->and($body[0]['due_at'])->not->toBeNull();
+});
+
+it('filters open reports whose deadline has passed with filter[due]=overdue', function () {
+    $this->travelTo(Carbon::parse('2026-10-05T12:00:00Z'));
+
+    $overdue = storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-05T11:00:00Z')]);
+    storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-05T12:00:00Z')]); // exactly now -> not overdue
+    storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-06T09:00:00Z')]); // future
+    storeReport(['location' => '/page']); // no deadline
+
+    $body = $this->getJson('/redline/api/report?filter[due]=overdue', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect($body)->toHaveCount(1)
+        ->and($body[0]['id'])->toBe($overdue);
+});
+
+it('filters reports due within the next 24h with filter[due]=due_soon, exclusive at +24h', function () {
+    $this->travelTo(Carbon::parse('2026-10-05T12:00:00Z'));
+
+    $atNow = storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-05T12:00:00Z')]);
+    $justInside = storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-06T11:59:59Z')]);
+    storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-06T12:00:00Z')]); // exactly +24h -> excluded
+    storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-05T11:00:00Z')]); // overdue, not due soon
+    storeReport(['location' => '/page']); // no deadline
+
+    $body = $this->getJson('/redline/api/report?filter[due]=due_soon', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect(collect($body)->pluck('id')->sort()->values()->all())
+        ->toBe(collect([$atNow, $justInside])->sort()->values()->all());
+});
+
+it('rejects an unknown due state with 422', function () {
+    $this->getJson('/redline/api/report?filter[due]=soon', $this->devHeaders)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['filter.due']);
+});
+
+it('never matches a closed report with filter[due], so overdue combined with resolved is empty', function () {
+    $this->travelTo(Carbon::parse('2026-10-05T12:00:00Z'));
+
+    $open = storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-05T10:00:00Z')]);
+    storeReport(['location' => '/page', 'status' => 'resolved', 'due_at' => Carbon::parse('2026-10-05T10:00:00Z')]);
+
+    $overdue = $this->getJson('/redline/api/report?filter[due]=overdue', $this->devHeaders)->json('data');
+
+    expect($overdue)->toHaveCount(1)
+        ->and($overdue[0]['id'])->toBe($open);
+
+    $combined = $this->getJson('/redline/api/report?filter[due]=overdue&filter[status]=resolved', $this->devHeaders)->json('data');
+
+    expect($combined)->toBe([]);
+});
+
+it('filters to undated reports across every status with filter[due]=none, excluding all dated ones', function () {
+    $openUndated = storeReport(['location' => '/page']);
+    $resolvedUndated = storeReport(['location' => '/page', 'status' => 'resolved']);
+    $openDated = storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-06T09:00:00Z')]);
+    $resolvedDated = storeReport(['location' => '/page', 'status' => 'resolved', 'due_at' => Carbon::parse('2026-10-06T09:00:00Z')]);
+
+    $body = $this->getJson('/redline/api/report?filter[due]=none', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    $ids = collect($body)->pluck('id');
+
+    expect($ids->sort()->values()->all())
+        ->toBe(collect([$openUndated, $resolvedUndated])->sort()->values()->all())
+        ->and($ids)->not->toContain($openDated, $resolvedDated);
+});
+
+it('keeps filter[due]=none matching an undated resolved report while excluding a resolved one with a deadline', function () {
+    $resolvedUndated = storeReport(['location' => '/page', 'status' => 'resolved']);
+    storeReport(['location' => '/page', 'status' => 'resolved', 'due_at' => Carbon::parse('2026-10-06T09:00:00Z')]);
+    storeReport(['location' => '/page']); // open + undated, excluded by the status filter
+
+    $body = $this->getJson('/redline/api/report?filter[due]=none&filter[status]=resolved', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect($body)->toHaveCount(1)
+        ->and($body[0]['id'])->toBe($resolvedUndated);
+});
+
+it('rejects filter[due]=bogus with 422', function () {
+    $this->getJson('/redline/api/report?filter[due]=bogus', $this->devHeaders)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['filter.due']);
+});
+
+it('filters to reports with no due date via filter[due_at:null]', function () {
+    $none = storeReport(['location' => '/page']);
+    storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-06T09:00:00Z')]);
+
+    $body = $this->getJson('/redline/api/report?filter[due_at:null]=1', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect($body)->toHaveCount(1)
+        ->and($body[0]['id'])->toBe($none);
+});
+
+it('range-filters due_at with filter[due_at:to]', function () {
+    $early = storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-05T11:00:00Z')]);
+    storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-06T11:00:00Z')]);
+
+    $body = $this->getJson('/redline/api/report?filter[due_at:to]=2026-10-05%2012:00:00', $this->devHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect($body)->toHaveCount(1)
+        ->and($body[0]['id'])->toBe($early);
+});
+
+it('sorts by due_at with NULL deadlines last in both directions', function () {
+    $this->travelTo(Carbon::parse('2026-10-05T12:00:00Z'));
+
+    $late = storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-08T09:00:00Z')]);
+    $early = storeReport(['location' => '/page', 'due_at' => Carbon::parse('2026-10-06T09:00:00Z')]);
+    $none = storeReport(['location' => '/page']);
+
+    $asc = $this->getJson('/redline/api/report?sort[due_at]=asc', $this->devHeaders)->json('data');
+    $desc = $this->getJson('/redline/api/report?sort[due_at]=desc', $this->devHeaders)->json('data');
+
+    expect(collect($asc)->pluck('id')->all())->toBe([$early, $late, $none])
+        ->and(collect($desc)->pluck('id')->all())->toBe([$late, $early, $none]);
+});
+
+it('breaks a due_at tie with a secondary created_at sort', function () {
+    $this->travelTo(Carbon::parse('2026-10-05T12:00:00Z'));
+    $sameDue = Carbon::parse('2026-10-07T09:00:00Z');
+
+    $first = storeReport(['location' => '/page', 'due_at' => $sameDue]);
+    $this->travel(1)->hour();
+    $second = storeReport(['location' => '/page', 'due_at' => $sameDue]);
+
+    $body = $this->getJson('/redline/api/report?sort[due_at]=asc&sort[created_at]=desc', $this->devHeaders)->json('data');
+
+    expect(collect($body)->pluck('id')->all())->toBe([$second, $first]);
 });
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Carbon;
 use Zipavlin\Redline\Models\Comment;
 use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\Screenshot;
@@ -162,6 +163,26 @@ it('report move relocates the pin and validates coordinates', function () {
     // Missing coordinates -> 422.
     $this->postJson("/redline/api/report/{$report['id']}/move", ['x' => 12.5], $dev)
         ->assertStatus(422);
+});
+
+// ---------------------------------------------------------------------------
+// report due date
+// ---------------------------------------------------------------------------
+
+it('report due_at endpoint sets and clears the deadline', function () {
+    $reporter = makeUser('reporter');
+    $report = makeReport($reporter);
+    $dev = authHeaders('developer');
+
+    $set = $this->patchJson("/redline/api/report/{$report['id']}/due_at", ['due_at' => '2026-10-10T12:00:00Z'], $dev)
+        ->assertStatus(200)
+        ->json();
+
+    expect(Carbon::parse($set['due_at'])->equalTo(Carbon::parse('2026-10-10T12:00:00Z')))->toBeTrue();
+
+    $this->patchJson("/redline/api/report/{$report['id']}/due_at", ['due_at' => null], $dev)
+        ->assertStatus(200)
+        ->assertJsonPath('due_at', null);
 });
 
 // ---------------------------------------------------------------------------
