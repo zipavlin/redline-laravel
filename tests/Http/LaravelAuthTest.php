@@ -147,6 +147,32 @@ it('exchanges the host session for a redline JWT on an empty-body login', functi
         ->and(app(User::class)->where('email', 'session@example.com')->count())->toBe(1);
 });
 
+it('refuses a session login for an existing pending redline user without minting a token', function () {
+    $this->app->singleton(AuthProvider::class, LaravelAuthProvider::class);
+
+    app(User::class)->create([
+        'name' => 'Pending User',
+        'email' => 'pending-session@example.com',
+        'password' => null,
+        'role' => Role::REPORTER,
+        'status' => 'pending',
+    ]);
+
+    logIntoHost('pending-session@example.com', 'Pending User');
+
+    $response = $this->postJson('/redline/api/auth/login', [])
+        ->assertStatus(202)
+        ->assertJsonPath('pending', true)
+        ->assertJsonPath('errors.0', 'Account not yet approved.');
+
+    // No JWT is minted for a pending identity (the middleware would 401 it anyway).
+    $tokenCookie = collect($response->baseResponse->headers->getCookies())
+        ->first(fn ($c) => $c->getName() === 'redline_token');
+
+    expect($tokenCookie)->toBeNull()
+        ->and(app(User::class)->where('email', 'pending-session@example.com')->count())->toBe(1);
+});
+
 it('returns 401 on login when no host application user is logged in', function () {
     $this->app->singleton(AuthProvider::class, LaravelAuthProvider::class);
 

@@ -3,6 +3,7 @@
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\URL;
+use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Auth\DomainAuthProvider;
@@ -172,6 +173,63 @@ it('S6: rejects a token after an admin resets the password', function () {
     $this->postJson("/redline/api/user/{$victim['id']}/reset-password", ['password' => 'brandnew123'], $admin)
         ->assertStatus(200);
     $this->getJson('/redline/api/auth/me', $victimHeaders)->assertStatus(401);
+});
+
+// ---------------------------------------------------------------------------
+// S12 - a pending account is rejected at the middleware, not per-endpoint
+// ---------------------------------------------------------------------------
+
+it('S12: rejects a pending admin token on every protected endpoint', function () {
+    $pendingAdmin = app(User::class)->create([
+        'name' => 'Pending Admin', 'email' => 'pending-admin@example.com',
+        'role' => 'admin', 'status' => 'pending',
+    ]);
+    $headers = ['Authorization' => 'Bearer '.makeAuthToken($pendingAdmin->toArray())];
+    $target = makeUser('reporter');
+
+    $this->postJson('/redline/api/user', [
+        'name' => 'Created By Pending', 'email' => 'created-by-pending@example.com',
+        'role' => 'reporter', 'password' => 'secret123',
+    ], $headers)->assertStatus(401);
+
+    $this->patchJson("/redline/api/user/{$target['id']}", ['role' => 'admin'], $headers)->assertStatus(401);
+    $this->deleteJson("/redline/api/user/{$target['id']}", [], $headers)->assertStatus(401);
+    $this->postJson("/redline/api/user/{$pendingAdmin->id}/approve", [], $headers)->assertStatus(401);
+    $this->postJson("/redline/api/user/{$target['id']}/reset-password", ['password' => 'brandnew123'], $headers)
+        ->assertStatus(401);
+    $this->getJson('/redline/api/auth/refresh', $headers)->assertStatus(401);
+
+    // None of the attempts changed anything.
+    expect(app(User::class)->find($target['id'])->role)->toBe(Role::REPORTER)
+        ->and(app(User::class)->find($pendingAdmin->id)->status)->toBe('pending');
+});
+
+it('S12: revokes the outstanding token when a user is moved back to pending', function () {
+    $adminHeaders = ['Authorization' => 'Bearer '.makeAuthToken(makeUser('admin'))];
+    $victim = makeUser('reporter');
+    $victimHeaders = ['Authorization' => 'Bearer '.makeAuthToken($victim)];
+
+    $this->getJson('/redline/api/auth/me', $victimHeaders)->assertStatus(200);
+
+    $this->patchJson("/redline/api/user/{$victim['id']}", ['status' => 'pending'], $adminHeaders)
+        ->assertStatus(200);
+
+    expect((int) app(User::class)->find($victim['id'])->token_version)->toBe(1);
+
+    $this->getJson('/redline/api/auth/me', $victimHeaders)->assertStatus(401);
+});
+
+it('S12: keeps token_version when pending is written to an already-pending user', function () {
+    $adminHeaders = ['Authorization' => 'Bearer '.makeAuthToken(makeUser('admin'))];
+    $pending = app(User::class)->create([
+        'name' => 'Already Pending', 'email' => 'already-pending@example.com',
+        'role' => 'reporter', 'status' => 'pending',
+    ]);
+
+    $this->patchJson("/redline/api/user/{$pending->id}", ['status' => 'pending'], $adminHeaders)
+        ->assertStatus(200);
+
+    expect((int) app(User::class)->find($pending->id)->token_version)->toBe(0);
 });
 
 // ---------------------------------------------------------------------------

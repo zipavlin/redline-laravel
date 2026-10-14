@@ -61,14 +61,11 @@ class AuthController extends Controller
             return $this->error(['Login not available via this provider.'], 403);
         }
 
-        // Session login has no credential the client alone controls, so a foreign
-        // Origin would let another site silently mint a redline session off the
-        // victim's host cookie. An absent Origin is a non-browser client - allowed.
-        if (
-            $this->auth->loginMode() === 'session'
-            && $request->headers->has('Origin')
-            && ! Origin::allows($request)
-        ) {
+        // A foreign Origin lets another site drive a login on the victim's behalf:
+        // in session mode it silently mints a redline session off the victim's host
+        // cookie, and in credentials mode the browser's password manager can submit
+        // the victim's saved credentials. An absent Origin is a non-browser client - allowed.
+        if ($request->headers->has('Origin') && ! Origin::allows($request)) {
             return response()->json(['message' => 'Forbidden origin.'], 403);
         }
 
@@ -171,7 +168,7 @@ class AuthController extends Controller
     {
         $request->validate(['email' => ['required', 'email']]);
 
-        $user = app(User::class)->where('email', $request->input('email'))->first();
+        $user = app(User::class)->whereEmail($request->input('email'))->first();
 
         if ($user) {
             $signed = URL::temporarySignedRoute(
@@ -205,7 +202,7 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8'],
         ]);
 
-        $user = app(User::class)->where('email', $validated['email'])->first();
+        $user = app(User::class)->whereEmail($validated['email'])->first();
 
         if (! $user) {
             return $this->error(['Invalid or expired reset link.'], 422);

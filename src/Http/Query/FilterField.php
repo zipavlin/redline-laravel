@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use InvalidArgumentException;
 use Zipavlin\Redline\Enums\QueryCapability;
 use Zipavlin\Redline\Enums\QueryOperator;
+use Zipavlin\Redline\Models\User;
 
 /**
  * One filterable target in a resource's {@see QuerySchema} - e.g. `status`,
@@ -46,6 +47,11 @@ final class FilterField
      *                                              are reachable through it, so adding a filter to the related schema
      *                                              (e.g. `email` on User for its own admin-only /user endpoint) can
      *                                              never silently widen this surface. Fails safe by construction.
+     * @param  (\Closure(?User): bool)|null  $gate  whether the current caller may use this filter at all. A denied
+     *                                              filter is a parse error (422), never a silent drop - a filter is a
+     *                                              boolean oracle read through meta.total, so a reporter who may not
+     *                                              filter by `email` must not be able to probe it either. The denial
+     *                                              happens at parse time, before any predicate reaches the database.
      */
     public function __construct(
         public readonly array $operators = [],
@@ -56,6 +62,7 @@ final class FilterField
         public readonly ?\Closure $normalize = null,
         public readonly ?\Closure $relatedSchema = null,
         public readonly array $relatedFilters = [],
+        public readonly ?\Closure $gate = null,
     ) {
         foreach ($this->operators as $operator) {
             if (! $operator->validFor(QueryCapability::FILTER)) {
@@ -81,8 +88,14 @@ final class FilterField
      *
      * @return array{field: self, target: string, attribute: ?string, operator: string, value: mixed}|null
      */
-    public function parse(string $key, string $target, ?string $attribute, string $operator, mixed $value, array &$errors): ?array
+    public function parse(string $key, string $target, ?string $attribute, string $operator, mixed $value, array &$errors, ?User $user = null): ?array
     {
+        if ($this->gate !== null && ! ($this->gate)($user)) {
+            $errors["filter.{$key}"] = ["Filter target [{$target}] is not available to you."];
+
+            return null;
+        }
+
         $allowed = array_map(fn (QueryOperator $op) => $op->value, $this->operators);
 
         if (! in_array($operator, $allowed, true)) {

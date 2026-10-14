@@ -390,7 +390,9 @@ final class ResourceQuery
 
     /**
      * Which relations to eager-load (and with which columns), withCount, and
-     * withExists - derived from the parsed include[] entries.
+     * withExists - derived from the parsed include[] entries, plus any
+     * `<relation>_count` sort target that needs its count column selected
+     * before applySort() runs (see countSortRelation()).
      *
      * @return array{with: array<int, string>, counts: array<int, string>, exists: array<int, string>}
      */
@@ -399,6 +401,14 @@ final class ResourceQuery
         $with = [];
         $counts = [];
         $exists = [];
+
+        foreach ($this->parsed->sort as $sort) {
+            $relation = $this->countSortRelation($sort['target']);
+
+            if ($relation !== null) {
+                $counts[] = $relation;
+            }
+        }
 
         foreach ($this->parsed->include as $entry) {
             $field = $entry['field'];
@@ -452,6 +462,24 @@ final class ResourceQuery
             'counts' => array_values(array_unique($counts)),
             'exists' => array_values(array_unique($exists)),
         ];
+    }
+
+    /**
+     * The relation a `sort[<relation>_count]` target counts, or null when the
+     * target isn't a count-sort or the model defines no such relation. A count
+     * sort is only meaningful once the count column exists, so the relation is
+     * fed into the counts plan before applySort() emits ORDER BY - otherwise
+     * `sort[reports_count]` orders by a column the query never selected.
+     */
+    private function countSortRelation(string $target): ?string
+    {
+        if (! str_ends_with($target, '_count')) {
+            return null;
+        }
+
+        $relation = substr($target, 0, -strlen('_count'));
+
+        return $relation !== '' && method_exists(app($this->modelClass), $relation) ? $relation : null;
     }
 
     /**
@@ -566,7 +594,7 @@ final class ResourceQuery
                 && ! isset($this->schema->filters["{$target}.{$attribute}"])) {
                 $entry = $this->parseRelatedFilter((string) $key, $target, $attribute, $operator, $value, $field, $errors);
             } else {
-                $entry = $field->parse((string) $key, $target, $attribute, $operator, $value, $errors);
+                $entry = $field->parse((string) $key, $target, $attribute, $operator, $value, $errors, $this->user());
             }
 
             if ($entry !== null) {
@@ -608,7 +636,7 @@ final class ResourceQuery
             return null;
         }
 
-        $delegate = $relatedField->parse($key, $attribute, null, $operator, $value, $errors);
+        $delegate = $relatedField->parse($key, $attribute, null, $operator, $value, $errors, $this->user());
 
         if ($delegate === null) {
             return null;
@@ -656,6 +684,12 @@ final class ResourceQuery
 
             if (! $field) {
                 $errors["include.{$target}"] = ["Unknown include target [{$target}]."];
+
+                continue;
+            }
+
+            if ($field->gate !== null && $field->gateErrors && ! ($field->gate)($this->user())) {
+                $errors["include.{$target}"] = ["Include target [{$target}] is not available to you."];
 
                 continue;
             }

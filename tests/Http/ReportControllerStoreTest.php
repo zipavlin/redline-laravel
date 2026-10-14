@@ -49,6 +49,17 @@ it('stores browser info', function () {
     expect($body['browser']['browser_name'])->toBe('Chrome');
 });
 
+it('strips browser.user_agent from the created report payload', function () {
+    $body = $this->postJson('/redline/api/report', makeReportData([
+        'browser' => ['browser_name' => 'Chrome', 'user_agent' => 'secret-ua'],
+    ]), authHeaders('reporter'))
+        ->assertStatus(201)
+        ->json();
+
+    expect($body['browser']['browser_name'])->toBe('Chrome')
+        ->and($body['browser'])->not->toHaveKey('user_agent');
+});
+
 // ---------------------------------------------------------------------------
 // Guest mode
 // ---------------------------------------------------------------------------

@@ -69,6 +69,23 @@ class Report extends Model
     }
 
     /**
+     * Serialize without `browser.user_agent`: the include-gate `browser` resolver
+     * strips it on the grammar path, but a raw model serialization (the mutation
+     * responses in ReportController) never goes through that resolver, so the
+     * privacy rule is enforced at the serialization boundary as well.
+     */
+    public function toArray(): array
+    {
+        $array = parent::toArray();
+
+        if (isset($array['browser']['user_agent'])) {
+            unset($array['browser']['user_agent']);
+        }
+
+        return $array;
+    }
+
+    /**
      * Statuses this user may move this report to right now, given the report's
      * current status. A transition must satisfy both the role's allowed target
      * set and the lifecycle chain.

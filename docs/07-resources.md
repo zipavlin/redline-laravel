@@ -19,7 +19,7 @@ All routes are registered under a single prefix:
 `redline.path` comes from `config('redline.path')` (default `redline`), so the default
 base path is `/redline/api`. There is **no versioned URL prefix** and no `Accept`-based
 API versioning. The bootstrap endpoint returns a `version` field (currently the constant
-`1`) - that is the capability-manifest version, not the package version. The composer
+`2`) - that is the capability-manifest version, not the package version. The composer
 package version is used only for asset cache-busting (`RedlineServiceProvider::getVersion()`
 via Composer InstalledVersions), never in the URL.
 
@@ -470,7 +470,7 @@ Response (`200`):
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "features": ["screenshots", "videos", "files", "comments"],
   "capabilities": {
     "guest_reporting": false,
@@ -495,7 +495,7 @@ Response (`200`):
 
 Field semantics:
 
-- `version` - capability-manifest version (constant `1`).
+- `version` - capability-manifest version (constant `2`).
 - `features` - enabled feature names: all of `screenshots`, `videos`, `files`, `comments`
   minus whatever `REDLINE_DISABLED` / `config('redline.disabled')` removes. The widget
   hides the corresponding capture modes.

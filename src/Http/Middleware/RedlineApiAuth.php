@@ -52,6 +52,13 @@ class RedlineApiAuth
                 return response()->json(['message' => 'Unauthenticated.'], 401);
             }
 
+            // A pending (not yet approved) account may not act at all. Rejecting
+            // here closes every protected endpoint in one place - including the
+            // admin-only approve/reset-password routes the account must not reach.
+            if (! $user->isApproved) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+
             // Expose the verified payload so controllers (e.g. refresh) never have
             // to trust an unverified base64 decode of the token.
             $request->attributes->set('redline_token_payload', $payload);

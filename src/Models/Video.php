@@ -25,12 +25,14 @@ class Video extends Model
 
     protected $appends = ['url'];
 
+    /**
+     * The binary endpoint's URL - authenticated by the caller's own Bearer token
+     * or HttpOnly cookie. No token is appended: RedlineApiAuth refuses tokens in
+     * the query string, so such a suffix only leaked the JWT into logs/Referer.
+     */
     public function getUrlAttribute(): string
     {
-        $token = request()->bearerToken();
-        $base = app(StorageProvider::class)->apiUrl()."/report/{$this->report_id}/video/{$this->id}/binary";
-
-        return $token ? "{$base}?token={$token}" : $base;
+        return app(StorageProvider::class)->apiUrl()."/report/{$this->report_id}/video/{$this->id}/binary";
     }
 
     public function report(): BelongsTo

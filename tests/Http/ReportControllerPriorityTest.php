@@ -95,6 +95,18 @@ it('returns the fresh row without disturbing other fields', function () {
         ->and($body['id'])->toBe($id);
 });
 
+it('strips browser.user_agent from the priority response', function () {
+    $id = createReportForPriority('normal');
+    app(Report::class)->find($id)->update(['browser' => ['browser_name' => 'Chrome', 'user_agent' => 'secret-ua']]);
+
+    $body = $this->patchJson("/redline/api/report/{$id}/priority", ['priority' => 'high'], authHeaders('developer'))
+        ->assertStatus(200)
+        ->json();
+
+    expect($body['browser']['browser_name'])->toBe('Chrome')
+        ->and($body['browser'])->not->toHaveKey('user_agent');
+});
+
 // ---------------------------------------------------------------------------
 // Authorization
 // ---------------------------------------------------------------------------

@@ -42,6 +42,36 @@ it('auto-generates a ULID on user creation', function () {
     expect($user->id)->toMatch('/^[0-9a-f-]{36}$/');
 });
 
+it('normalizes the email on every write', function () {
+    $user = User::on('redline')->create([
+        'name' => 'Case', 'email' => '  MiXeD@Example.COM  ', 'role' => 'reporter',
+    ]);
+
+    expect($user->email)->toBe('mixed@example.com')
+        ->and(User::on('redline')->find($user->id)->email)->toBe('mixed@example.com');
+
+    $user->update(['email' => 'Moved@Example.COM']);
+
+    expect($user->fresh()->email)->toBe('moved@example.com');
+});
+
+it('matches a legacy mixed-case stored email through the whereEmail scope', function () {
+    DB::connection('redline')->table('redline_users')->insert([
+        'id' => 'legacy-user',
+        'name' => 'Legacy',
+        'email' => 'Legacy@Example.COM',
+        'role' => 'reporter',
+        'status' => 'approved',
+        'token_version' => 0,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    expect(User::on('redline')->whereEmail('legacy@example.com')->count())->toBe(1)
+        ->and(User::on('redline')->whereEmail('LEGACY@example.com')->count())->toBe(1)
+        ->and(User::on('redline')->whereEmail('nobody@example.com')->count())->toBe(0);
+});
+
 // ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------

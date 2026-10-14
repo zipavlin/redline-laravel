@@ -18,7 +18,9 @@ beforeEach(function () {
 // ---------------------------------------------------------------------------
 
 it('is public - returns 200 with no auth and no cookies', function () {
-    $this->getJson('/redline/api/bootstrap')->assertStatus(200);
+    $this->getJson('/redline/api/bootstrap')
+        ->assertStatus(200)
+        ->assertJsonPath('version', 2);
 });
 
 // ---------------------------------------------------------------------------

@@ -66,6 +66,25 @@ it('searches users by name and email via filter[search]', function () {
         ->and($body[0]['name'])->toBe('Zebra Zoe');
 });
 
+it('lets a reporter search by name but never by email fragment', function () {
+    app(User::class)->create(['name' => 'Zebra Zoe', 'email' => 'zoe@example.com', 'role' => 'reporter']);
+
+    $byName = $this->getJson('/redline/api/user?filter[search:like]=zebra&include[]=name', authHeaders('reporter'))
+        ->assertStatus(200)
+        ->json('data');
+
+    expect($byName)->toHaveCount(1)
+        ->and($byName[0]['name'])->toBe('Zebra Zoe');
+
+    // The same reporter must not be able to walk the email column one fragment at a
+    // time through the member-picker search.
+    $byEmail = $this->getJson('/redline/api/user?filter[search:like]=zoe@example&include[]=name', authHeaders('reporter'))
+        ->assertStatus(200)
+        ->json('data');
+
+    expect($byEmail)->toBe([]);
+});
+
 it('filters users by role and sorts by name', function () {
     app(User::class)->create(['name' => 'Bravo Dev', 'email' => 'b@example.com', 'role' => 'developer']);
     app(User::class)->create(['name' => 'Alpha Dev', 'email' => 'a@example.com', 'role' => 'developer']);
@@ -84,17 +103,79 @@ it('lets reporters and developers list users, with filters and includes', functi
     makeUser('reporter');
     makePendingUser();
 
+    // No `email` here: only developers/admins may read it, and a reporter asking
+    // for it is a 422 (see below).
+    $include = 'include[]=name&include[]=role&include[]=reports:count&include[]=comments:count';
+
     foreach (['reporter', 'developer'] as $role) {
-        $body = $this->getJson('/redline/api/user?'.USER_INCLUDE.'&filter[status]=approved', authHeaders($role))
+        $body = $this->getJson('/redline/api/user?'.$include.'&filter[status]=approved', authHeaders($role))
             ->assertStatus(200)
             ->json();
 
         expect($body)->toHaveKeys(['data', 'meta'])
             ->and($body['data'][0])->toHaveKeys([
-                'id', 'status', 'created_at', 'name', 'email', 'role', 'reports_count', 'comments_count',
+                'id', 'status', 'created_at', 'name', 'role', 'reports_count', 'comments_count',
             ])
+            ->and($body['data'][0])->not->toHaveKey('email')
             ->and(collect($body['data'])->pluck('status')->unique()->all())->toBe(['approved']);
     }
+});
+
+it('sorts the user list by report and comment counts', function () {
+    $threeReports = makeUser('reporter');
+    $threeComments = makeUser('reporter');
+    $oneComment = makeUser('reporter');
+
+    $reports = collect(range(1, 3))->map(fn (int $i) => app(Report::class)->create([
+        'author_id' => $threeReports['id'], 'url' => "https://x/{$i}", 'location' => "/r{$i}",
+        'body' => 'r', 'status' => 'new',
+    ]));
+
+    // One report of their own for the commenter, plus three comments on the first
+    // user's reports and one from the third user - so reports_count and
+    // comments_count each form a distinct, total order across the three.
+    app(Report::class)->create([
+        'author_id' => $threeComments['id'], 'url' => 'https://x/own', 'location' => '/own',
+        'body' => 'r', 'status' => 'new',
+    ]);
+
+    foreach ($reports as $report) {
+        app(Comment::class)->create(['report_id' => $report->id, 'author_id' => $threeComments['id'], 'body' => 'c']);
+    }
+    app(Comment::class)->create(['report_id' => $reports->first()->id, 'author_id' => $oneComment['id'], 'body' => 'c']);
+
+    $byReports = $this->getJson('/redline/api/user?filter[role]=reporter&include[]=name&sort[reports_count]=desc', $this->adminHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect(collect($byReports)->pluck('name')->all())
+        ->toBe([$threeReports['name'], $threeComments['name'], $oneComment['name']]);
+
+    $byComments = $this->getJson('/redline/api/user?filter[role]=reporter&include[]=name&sort[comments_count]=asc', $this->adminHeaders)
+        ->assertStatus(200)
+        ->json('data');
+
+    expect(collect($byComments)->pluck('name')->all())
+        ->toBe([$threeReports['name'], $oneComment['name'], $threeComments['name']]);
+});
+
+it('rejects a reporter asking for the email include with 422', function () {
+    $this->getJson('/redline/api/user?include[]=name&include[]=email', authHeaders('reporter'))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['include.email']);
+});
+
+it('rejects a reporter filtering by email with 422', function () {
+    $this->getJson('/redline/api/user?filter[email:like]=example.com', authHeaders('reporter'))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['filter.email:like']);
+});
+
+it('rejects a pending caller from the user index with 401', function () {
+    $pending = makePendingUser();
+
+    $this->getJson('/redline/api/user', ['Authorization' => 'Bearer '.makeAuthToken($pending->toArray())])
+        ->assertStatus(401);
 });
 
 it('rejects unauthenticated callers from the user index', function () {
@@ -259,6 +340,25 @@ it('rejects a duplicate email on store', function () {
     ], $this->adminHeaders)->assertStatus(422);
 });
 
+it('rejects a case-variant duplicate email on store', function () {
+    app(User::class)->create(['name' => 'Dup', 'email' => 'case-dup@example.com', 'role' => 'reporter']);
+
+    $this->postJson('/redline/api/user', [
+        'name' => 'Dup 2', 'email' => 'Case-Dup@Example.com', 'role' => 'reporter', 'password' => 'secret123',
+    ], $this->adminHeaders)->assertStatus(422);
+});
+
+it('stores a new user email lowercased', function () {
+    $body = $this->postJson('/redline/api/user', [
+        'name' => 'Mixed Case', 'email' => 'Mixed@Example.COM', 'role' => 'reporter', 'password' => 'secret123',
+    ], $this->adminHeaders)
+        ->assertStatus(201)
+        ->json();
+
+    expect($body['email'])->toBe('mixed@example.com')
+        ->and(app(User::class)->where('email', 'mixed@example.com')->exists())->toBeTrue();
+});
+
 it('rejects a duplicate email on update', function () {
     $user = makeUser('reporter');
     $other = makeUser('reporter');
@@ -266,6 +366,27 @@ it('rejects a duplicate email on update', function () {
     $this->patchJson("/redline/api/user/{$user['id']}", [
         'email' => $other['email'],
     ], $this->adminHeaders)->assertStatus(422);
+});
+
+it('rejects a case-variant duplicate email on update', function () {
+    $user = makeUser('reporter');
+    $other = makeUser('reporter');
+
+    $this->patchJson("/redline/api/user/{$user['id']}", [
+        'email' => mb_strtoupper($other['email']),
+    ], $this->adminHeaders)->assertStatus(422);
+});
+
+it('allows keeping the same email in a different case on update', function () {
+    $user = makeUser('reporter');
+
+    $body = $this->patchJson("/redline/api/user/{$user['id']}", [
+        'email' => mb_strtoupper($user['email']),
+    ], $this->adminHeaders)
+        ->assertStatus(200)
+        ->json();
+
+    expect($body['email'])->toBe($user['email']);
 });
 
 it('allows keeping the same email on update', function () {
@@ -294,6 +415,28 @@ it('updates a user via update', function () {
 
     expect($body['role'])->toBe('developer')
         ->and($body['status'])->toBe('pending');
+});
+
+it('reports the correct report and comment counts in mutation responses', function () {
+    $user = makeUser('reporter');
+    $report = app(Report::class)->create([
+        'author_id' => $user['id'], 'url' => 'https://x/one', 'location' => '/one',
+        'body' => 'r', 'status' => 'new',
+    ]);
+    app(Comment::class)->create(['report_id' => $report->id, 'author_id' => $user['id'], 'body' => 'c']);
+
+    $updated = $this->patchJson("/redline/api/user/{$user['id']}", ['role' => 'developer'], $this->adminHeaders)
+        ->assertStatus(200)
+        ->json();
+
+    $approved = $this->postJson("/redline/api/user/{$user['id']}/approve", [], $this->adminHeaders)
+        ->assertStatus(200)
+        ->json();
+
+    expect($updated['reports_count'])->toBe(1)
+        ->and($updated['comments_count'])->toBe(1)
+        ->and($approved['reports_count'])->toBe(1)
+        ->and($approved['comments_count'])->toBe(1);
 });
 
 it('rejects non-admins from update', function () {

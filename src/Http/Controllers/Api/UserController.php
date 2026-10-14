@@ -178,6 +178,12 @@ class UserController extends Controller
 
         $model->update($validated);
 
+        // Moving a user back to pending revokes their access - invalidate any JWT
+        // already issued for them, or that token keeps working until it expires.
+        if (! $wasPending && ($validated['status'] ?? null) === 'pending') {
+            $model->bumpTokenVersion();
+        }
+
         $this->audit($request, 'user.update', $model->id);
 
         // Notify the user the moment their pending registration is approved;

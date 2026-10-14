@@ -54,6 +54,10 @@ final class IncludeField
      *                                                          ($model, $attributes): mixed. Non-bare forms
      *                                                          (:count/:exists) are always handled generically,
      *                                                          even when a resolver is set.
+     * @param  bool  $gateErrors  when true, a denied $gate is a parse error (422) rather than a silent omission.
+     *                            Use for fields whose silent absence would be ambiguous/misleading (e.g. `email`,
+     *                            where a reporter must be told they may not ask); leave false for fields whose
+     *                            omission is the intended behaviour (e.g. `browser` for non-developers).
      */
     public function __construct(
         public readonly ?string $column = null,
@@ -66,6 +70,7 @@ final class IncludeField
         public readonly ?array $eagerLoad = null,
         public readonly ?\Closure $gate = null,
         public readonly ?\Closure $resolver = null,
+        public readonly bool $gateErrors = false,
     ) {
         foreach ($this->operators as $operator) {
             if (! $operator->validFor(QueryCapability::INCLUDE)) {

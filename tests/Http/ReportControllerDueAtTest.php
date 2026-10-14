@@ -93,6 +93,18 @@ it('returns the fresh row without disturbing other fields', function () {
         ->and($body['priority'])->toBe($before->priority);
 });
 
+it('strips browser.user_agent from the due_at response', function () {
+    $id = createReportForDueAt();
+    app(Report::class)->find($id)->update(['browser' => ['browser_name' => 'Chrome', 'user_agent' => 'secret-ua']]);
+
+    $body = $this->patchJson("/redline/api/report/{$id}/due_at", ['due_at' => '2026-10-07T09:00:00Z'], authHeaders('developer'))
+        ->assertStatus(200)
+        ->json();
+
+    expect($body['browser']['browser_name'])->toBe('Chrome')
+        ->and($body['browser'])->not->toHaveKey('user_agent');
+});
+
 // ---------------------------------------------------------------------------
 // Clearing the deadline
 // ---------------------------------------------------------------------------

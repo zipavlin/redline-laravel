@@ -14,6 +14,7 @@ use Zipavlin\Redline\Http\Query\AggregateField;
 use Zipavlin\Redline\Http\Query\FilterField;
 use Zipavlin\Redline\Http\Query\IncludeField;
 use Zipavlin\Redline\Http\Query\QuerySchema;
+use Zipavlin\Redline\Http\Query\ResourceQuery;
 use Zipavlin\Redline\Models\Concerns\HasQuerySchema;
 
 class User extends Model
@@ -83,6 +84,37 @@ class User extends Model
             ->take(2)
             ->map(fn ($word) => mb_strtoupper($word[0]))
             ->join('');
+    }
+
+    /**
+     * Canonical storage and lookup form of an email address: trimmed and
+     * lowercased. A non-string collapses to null rather than reaching a query.
+     */
+    public static function normalizeEmail(mixed $email): ?string
+    {
+        if (! is_string($email)) {
+            return null;
+        }
+
+        return mb_strtolower(trim($email));
+    }
+
+    /**
+     * Normalize on every write, so a case or whitespace variant can never squat
+     * an existing address and lookups compare against a single stored form.
+     */
+    public function setEmailAttribute(mixed $value): void
+    {
+        $this->attributes['email'] = self::normalizeEmail($value);
+    }
+
+    /**
+     * Look users up by email, comparing case-insensitively so a row written
+     * before normalization still matches whoever owns it.
+     */
+    public function scopeWhereEmail(Builder $query, mixed $email): Builder
+    {
+        return $query->whereRaw('lower(email) = lower(?)', [self::normalizeEmail($email)]);
     }
 
     /**
@@ -156,24 +188,44 @@ class User extends Model
         return new QuerySchema(
             filters: [
                 // Virtual OR box, matching the pre-grammar UserController::index() `search`.
+                // `email` is part of the OR box only for developers/admins - /user is
+                // any-authenticated (the widget member picker) and an email LIKE match is
+                // a prefix-walk oracle for a reporter, so non-developers search names only.
                 'search' => new FilterField(
                     operators: [QueryOperator::LIKE],
-                    resolver: function (Builder $query, string $operator, mixed $value): void {
+                    resolver: function (Builder $query, string $operator, mixed $value, ResourceQuery $rq): void {
                         $needle = '%'.$value.'%';
-                        $query->where(fn (Builder $inner) => $inner
-                            ->where('name', 'like', $needle)
-                            ->orWhere('email', 'like', $needle));
+                        $developer = $rq->user()?->isDeveloper === true;
+
+                        $query->where(fn (Builder $inner) => $developer
+                            ? $inner->where('name', 'like', $needle)->orWhere('email', 'like', $needle)
+                            : $inner->where('name', 'like', $needle));
                     },
                 ),
                 'name' => new FilterField(operators: QueryOperator::string(), column: 'name'),
-                'email' => new FilterField(operators: QueryOperator::string(), column: 'email'),
+                // Declared (its own admin endpoint needs it, and Report's relatedFilters
+                // allowlist is what keeps it unreachable through `filter[author.email]`),
+                // but gated: a non-developer filter[] is a 422 at parse time, so the
+                // boolean-oracle read through meta.total is closed, not merely unlisted.
+                'email' => new FilterField(
+                    operators: QueryOperator::string(),
+                    column: 'email',
+                    gate: fn (?User $user) => $user?->isDeveloper === true,
+                ),
                 'role' => new FilterField(operators: [QueryOperator::EQ, QueryOperator::IN], column: 'role'),
                 'status' => new FilterField(operators: [QueryOperator::EQ, QueryOperator::IN], column: 'status'),
             ],
             sortable: ['name', 'created_at', 'reports_count', 'comments_count'],
             includable: [
                 'name' => new IncludeField(column: 'name'),
-                'email' => new IncludeField(column: 'email'),
+                // Developer-only, and a denial is a 422 - unlike `browser`'s silent
+                // omission, a reporter asking for `email` must be told, not handed a row
+                // that quietly lacks the key.
+                'email' => new IncludeField(
+                    column: 'email',
+                    gate: fn (?User $user) => $user?->isDeveloper === true,
+                    gateErrors: true,
+                ),
                 'role' => new IncludeField(column: 'role'),
                 'initials' => new IncludeField(column: 'initials'),
                 'reports' => new IncludeField(relation: 'reports', operators: [QueryOperator::COUNT]),

@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Auth\GenericUser;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\LaravelAuthProvider;
@@ -8,6 +10,28 @@ use Zipavlin\Redline\Providers\Auth\LaravelAuthProvider;
 function laravelAuthProvider(): LaravelAuthProvider
 {
     return new LaravelAuthProvider;
+}
+
+/**
+ * Seed a row straight through the query builder, bypassing the model's email
+ * normalization, to stand in for a row written before normalization existed.
+ */
+function insertLegacyUser(string $name, string $email, string $role = 'reporter'): string
+{
+    $id = (string) Str::uuid();
+
+    DB::connection('redline')->table('redline_users')->insert([
+        'id' => $id,
+        'name' => $name,
+        'email' => $email,
+        'role' => $role,
+        'status' => 'approved',
+        'token_version' => 0,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    return $id;
 }
 
 function actAsHostUser(array $attributes = []): GenericUser
@@ -89,34 +113,24 @@ it('returns the existing redline user untouched when the email matches', functio
 // ---------------------------------------------------------------------------
 
 it('matches a mixed-case stored redline email against a lowercase host email', function () {
-    $existing = app(User::class)->create([
-        'name' => 'Mixed Case',
-        'email' => 'Foo@Example.com',
-        'role' => 'developer',
-        'status' => 'approved',
-    ]);
+    $id = insertLegacyUser('Mixed Case', 'Foo@Example.com', 'developer');
 
     actAsHostUser(['email' => 'foo@example.com']);
 
     $user = laravelAuthProvider()->login([])['user'];
 
-    expect($user->id)->toBe($existing->id)
+    expect($user->id)->toBe($id)
         ->and(app(User::class)->count())->toBe(1);
 });
 
 it('matches a whitespace-padded stored redline email against a clean host email', function () {
-    $existing = app(User::class)->create([
-        'name' => 'Padded',
-        'email' => '  padded@example.com  ',
-        'role' => 'reporter',
-        'status' => 'approved',
-    ]);
+    $id = insertLegacyUser('Padded', '  padded@example.com  ');
 
     actAsHostUser(['email' => 'padded@example.com']);
 
     $user = laravelAuthProvider()->login([])['user'];
 
-    expect($user->id)->toBe($existing->id)
+    expect($user->id)->toBe($id)
         ->and(app(User::class)->count())->toBe(1);
 });
 

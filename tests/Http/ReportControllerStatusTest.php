@@ -293,3 +293,15 @@ it('returns the author-excluded members list in the status response', function (
     expect($body)->toHaveKey('members')
         ->and(array_column($body['members'], 'id'))->toBe([$actor['id']]);
 });
+
+it('strips browser.user_agent from the status response', function () {
+    $id = createReportForStatus('noticed');
+    app(Report::class)->find($id)->update(['browser' => ['browser_name' => 'Chrome', 'user_agent' => 'secret-ua']]);
+
+    $body = $this->patchJson("/redline/api/report/{$id}/status", ['status' => 'progress'], authHeaders('developer'))
+        ->assertStatus(200)
+        ->json();
+
+    expect($body['browser']['browser_name'])->toBe('Chrome')
+        ->and($body['browser'])->not->toHaveKey('user_agent');
+});

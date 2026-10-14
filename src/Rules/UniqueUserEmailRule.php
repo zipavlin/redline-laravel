@@ -19,7 +19,9 @@ class UniqueUserEmailRule implements ValidationRule
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $query = app(User::class)->newQuery()->where('email', $value);
+        // Case-insensitive so a case variant of an existing address is rejected
+        // too - including rows written before emails were normalized on write.
+        $query = app(User::class)->newQuery()->whereEmail($value);
 
         if ($this->ignoreId !== null) {
             $query->where('id', '!=', $this->ignoreId);

@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Facades\Hash;
+use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\ApprovalAuthProvider;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Auth\ClosedAuthProvider;
@@ -115,6 +117,17 @@ it('returns a uniform 401 (not 404) when no account exists, to avoid email enume
     ])->assertStatus(401);
 });
 
+it('logs in when the email is supplied in a different case than stored', function () {
+    app(User::class)->create([
+        'name' => 'Cased', 'email' => 'cased@example.com',
+        'password' => Hash::make('secret123'), 'role' => 'reporter', 'status' => 'approved',
+    ]);
+
+    $this->postJson('/redline/api/auth/login', [
+        'email' => 'Cased@Example.COM', 'password' => 'secret123',
+    ])->assertStatus(200);
+});
+
 it('returns the redline 422 envelope (errors array + pending false) for an empty login body', function () {
     $body = $this->postJson('/redline/api/auth/login', [])
         ->assertStatus(422)
@@ -138,6 +151,34 @@ it('returns the redline 422 envelope for malformed credentials', function () {
         ->and($body['errors'])->not->toBeEmpty()
         ->and($body['pending'])->toBeFalse()
         ->and($body)->not->toHaveKey('message');
+});
+
+// ---------------------------------------------------------------------------
+// Login - Origin gate (all login modes)
+// ---------------------------------------------------------------------------
+
+it('rejects a credentials login carrying a foreign Origin with 403', function () {
+    app(User::class)->create([
+        'name' => 'Origin User', 'email' => 'origin@example.com',
+        'password' => Hash::make('secret123'), 'role' => 'reporter', 'status' => 'approved',
+    ]);
+
+    $this->postJson('/redline/api/auth/login', [
+        'email' => 'origin@example.com', 'password' => 'secret123',
+    ], ['Origin' => 'https://evil.example'])
+        ->assertStatus(403)
+        ->assertJson(['message' => 'Forbidden origin.']);
+});
+
+it('accepts a credentials login from the same-origin Origin', function () {
+    app(User::class)->create([
+        'name' => 'Origin User', 'email' => 'origin@example.com',
+        'password' => Hash::make('secret123'), 'role' => 'reporter', 'status' => 'approved',
+    ]);
+
+    $this->postJson('/redline/api/auth/login', [
+        'email' => 'origin@example.com', 'password' => 'secret123',
+    ], ['Origin' => url('/')])->assertStatus(200);
 });
 
 // ---------------------------------------------------------------------------
@@ -312,6 +353,16 @@ it('returns 422 (not 500) when registering an already-taken email', function () 
         ->json();
 
     expect(collect($body['errors'])->flatten()->implode(' '))->toContain('already been taken');
+});
+
+it('returns 422 when registering a case variant of an existing email', function () {
+    app(User::class)->create(['name' => 'Existing', 'email' => 'case@example.com', 'role' => 'reporter']);
+
+    $this->postJson('/redline/api/auth/register', [
+        'name' => 'Squatter', 'email' => 'CASE@Example.COM', 'password' => 'secret123', 'role' => 'reporter',
+    ])->assertStatus(422);
+
+    expect(app(User::class)->count())->toBe(1);
 });
 
 // ---------------------------------------------------------------------------

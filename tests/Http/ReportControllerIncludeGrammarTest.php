@@ -3,6 +3,7 @@
 use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\Screenshot;
 use Zipavlin\Redline\Models\User;
+use Zipavlin\Redline\Models\Video;
 
 beforeEach(function () {
     ensureRedlineDirectories();
@@ -51,6 +52,20 @@ it('include[screenshot]=url returns a working URL even when only url was request
         ->json();
 
     expect($body['screenshot']['url'])->toBeString()->toContain('/screenshot/');
+});
+
+it('never appends the bearer token to media URLs', function () {
+    $report = includeGrammarReport();
+    app(Screenshot::class)->create(['report_id' => $report['id'], 'path' => 'x.png']);
+    app(Video::class)->create(['report_id' => $report['id'], 'path' => 'x.webm']);
+
+    $body = $this->getJson(
+        "/redline/api/report/{$report['id']}?include[screenshot]=url&include[video]=url",
+        $this->devHeaders,
+    )->assertStatus(200)->json();
+
+    expect($body['screenshot']['url'])->toContain('/screenshot/')->not->toContain('token=')
+        ->and($body['video']['url'])->toContain('/video/')->not->toContain('token=');
 });
 
 it('rejects include[author]=initials with 422 - initials are no longer generated server-side', function () {

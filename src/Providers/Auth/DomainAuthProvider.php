@@ -91,9 +91,7 @@ class DomainAuthProvider extends AuthProvider implements Listable
 
     public function verify(array $data): array
     {
-        $email = $data['email'] ?? '';
-
-        $user = app(User::class)->where('email', $email)->first();
+        $user = app(User::class)->whereEmail($data['email'] ?? '')->first();
 
         if (! $user) {
             return ['error' => 'Invalid or expired verification link.'];

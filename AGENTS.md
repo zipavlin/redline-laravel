@@ -31,7 +31,7 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 ### PHP (Pest)
 ```
-composer test                    # full Pest suite (baseline: 340 passed, 0 skipped; see Test status)
+composer test                    # full Pest suite (baseline: 503 passed, 0 skipped; see Test status)
 composer test-coverage           # Pest + coverage
 composer format                  # pint (Laravel defaults; no pint.json)
 vendor/bin/pest --filter=Report  # single file / group
@@ -47,7 +47,7 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-`vendor/bin/pest` reports **473 passed, 0 skipped (1526 assertions)**. The package has a
+`vendor/bin/pest` reports **503 passed, 0 skipped (1625 assertions)**. The package has a
 single storage backend, so there are no environment-dependent skips.
 
 ## Architecture

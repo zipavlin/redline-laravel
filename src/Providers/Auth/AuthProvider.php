@@ -142,7 +142,7 @@ abstract class AuthProvider
             return ['error' => $validator->errors()->first(), 'code' => 422];
         }
 
-        $user = app(User::class)->where('email', $data['email'] ?? '')->first();
+        $user = app(User::class)->whereEmail($data['email'] ?? '')->first();
 
         // Uniform response for "no such account" and "wrong password" so login
         // cannot be used to enumerate registered emails. A dummy hash check keeps

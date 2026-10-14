@@ -72,7 +72,9 @@ class LaravelAuthProvider extends AuthProvider implements Listable
      *
      * The Laravel user's email is the only join key to a redline identity, so a
      * host user without one fails closed rather than creating an unjoinable record.
-     * An existing redline user is returned untouched - no name sync, no role change.
+     * An existing redline user is returned untouched - no name sync, no role change -
+     * except that a pending one is refused with the canonical pending descriptor
+     * (never a JWT), matching the credentials-mode contract.
      *
      * $data is ignored: in session mode the host session is the only credential.
      */
@@ -91,7 +93,16 @@ class LaravelAuthProvider extends AuthProvider implements Listable
             return ['error' => 'Host user has no email address.', 'code' => 401];
         }
 
-        return ['user' => $this->findByEmail($email) ?? $this->provisionUser($laravel, $email)];
+        $user = $this->findByEmail($email) ?? $this->provisionUser($laravel, $email);
+
+        // A newly provisioned user is always approved; only a pre-existing pending
+        // identity reaches this. Minting a token here would contradict the
+        // middleware, which 401s every token belonging to a non-approved user.
+        if (! $user->isApproved) {
+            return ['status' => 'pending', 'message' => 'Account not yet approved.', 'code' => 202];
+        }
+
+        return ['user' => $user];
     }
 
     /**

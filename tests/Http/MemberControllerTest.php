@@ -231,7 +231,7 @@ it('denies a guest removing themselves from a report', function () {
     expect(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(1);
 });
 
-it('denies a pending user removing themselves from a report', function () {
+it('rejects a pending user at the middleware - no self-removal', function () {
     ['report' => $report] = memberTarget();
     $pending = app(User::class)->create([
         'name' => 'Pending Self Remover',
@@ -241,11 +241,12 @@ it('denies a pending user removing themselves from a report', function () {
     ]);
     $report->members()->attach($pending->id);
 
+    // A pending token never reaches the controller: RedlineApiAuth rejects it.
     $this->deleteJson(
         "/redline/api/report/{$report->id}/member",
         ['user_ids' => [$pending->id]],
         ['Authorization' => 'Bearer '.makeAuthToken($pending->toArray())],
-    )->assertStatus(403);
+    )->assertStatus(401);
 
     expect(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(1);
 });
