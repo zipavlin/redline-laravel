@@ -22,7 +22,7 @@ The package registers itself through Laravel's package auto-discovery (`extra.la
 
 ## Interactive setup - `php artisan redline:install`
 
-The recommended path. The command walks you through auth, guard, features, email, publishing, and the first admin user, writing the chosen values straight into `.env` (updating existing keys, appending new ones; if no `.env` is found it warns and skips the write). Provider values are stored as fully-qualified class names.
+The recommended path. The command walks you through auth, guard, features, email, publishing, composer updates, and the first admin user, writing the chosen values straight into `.env` (updating existing keys, appending new ones; if no `.env` is found it warns and skips the write). Provider values are stored as fully-qualified class names.
 
 Check detailed information about each step in [08-commands.md](08-commands.md#redlineinstall)
 
@@ -36,7 +36,7 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
    php artisan migrate --path=vendor/zipavlin/redline/database/redline --database=redline
    ```
 
-   which executes the package's numbered migrations `0001_`–`0006_` against
+   which executes the package's numbered migrations `0001_`–`0009_` against
    `storage/app/redline/database/redline.db`.
 
 2. **Auth provider** - *"Controls how users register and which roles they can claim."*
@@ -79,9 +79,16 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
    - *"Publish Redline config? This is not needed - you can set Redline in .env"* (default: **No**) - runs `vendor:publish --tag=redline-config`, overwriting only after a second confirmation if `config/redline.php` already exists.
    - *"Publish Redline assets to public/vendor/redline/?"* (default: **Yes**) - runs `vendor:publish --tag=redline-assets`.
 
-7. **First admin user** - *"Would you like to create the first admin user?"* (default: **Yes**) - runs `php artisan redline:user` (password minimum 6 characters).
+7. **Composer updates** - no prompt. The installer adds the `post-package-update` script
+   `Zipavlin\Redline\ComposerHook::postPackageUpdate` to your `composer.json`, so a later
+   `composer update` runs `php artisan redline:update --force` automatically (see
+   [Updating](#updating)). A hook that is already there is reported and left alone; if
+   `composer.json` is missing or unreadable the installer only warns - `redline:update`
+   offers to add it later.
 
-8. **Done** - prints next steps: set `APP_ENV=staging` (and `APP_DEBUG=true`) on the staging server, deploy, and visit `/redline/dashboard` to review reports.
+8. **First admin user** - *"Would you like to create the first admin user?"* (default: **Yes**) - runs `php artisan redline:user` (password minimum 6 characters).
+
+9. **Done** - prints next steps: set `APP_ENV=staging` (and `APP_DEBUG=true`) on the staging server, deploy, and visit `/redline/dashboard` to review reports.
 
 > The installer's hint mentions `APP_DEBUG=true`, but the default `Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider` only checks `APP_ENV=staging`. `APP_DEBUG` matters only if you pick the Debug guard. See [06-guards.md](06-guards.md).
 
@@ -110,7 +117,7 @@ Only needed if you skip the installer and configure everything through `.env` yo
 
 These three tags are available in **every** environment - they are not gated by the guard. If you publish the config, remember that every `env()` call in it can still be overridden from `.env`; many setups skip `redline-config` entirely and configure Redline only through environment variables.
 
-> The storage schema is **not** created automatically at runtime - the installer runs the migrations for you. If you configured storage manually and the tables are missing, the storage layer throws a `RuntimeException` telling you to run `php artisan redline:install`.
+> The storage schema is **not** created automatically at runtime - the installer runs the migrations for you. If you configured storage manually and the tables are missing, the storage layer throws a `RuntimeException` telling you to run `php artisan redline:install`. A database that exists but is *behind* the package version is not detected at boot, so run `php artisan redline:update` (or the composer hook that runs it) after every upgrade.
 
 ## Post-install checklist
 
@@ -132,11 +139,47 @@ The command verifies the install (on a fresh host it points you at
 `redline:install` instead - an update never creates the database), reports
 and runs only the pending package migrations with a pre-migration SQLite
 backup, re-publishes assets with `--force`, offers to re-publish a published
-config or mail views (never overwritten under `--force`), and clears the
-config/view/route caches. It is idempotent and safe to re-run. Flags:
+config or mail views (never overwritten under `--force`), offers to register
+the composer `post-package-update` hook, and clears the config/view/route
+caches. It is idempotent and safe to re-run. Flags:
 `--force` (`-F`) for deploy scripts, `--dry-run` to preview,
 `--no-backup` to skip the backup. Full details in
 [08-commands.md](08-commands.md#redlineupdate).
+
+### Automatic updates via composer
+
+`redline:install` writes a `post-package-update` script into the host's
+`composer.json`:
+
+```json
+"scripts": {
+    "post-package-update": [
+        "Zipavlin\\Redline\\ComposerHook::postPackageUpdate"
+    ]
+}
+```
+
+Composer runs it after every package update; when the updated package is
+Redline itself, the hook shells out to `php artisan redline:update --force` in a
+fresh process, so the new migrations and assets are applied without a manual
+step. The hook never fails the `composer update` - a failed artisan run is
+reported on stderr and left for you to re-run by hand.
+
+`composer require zipavlin/redline` fires `post-package-install`, **not**
+`post-package-update`, so the hook deliberately does nothing on the first
+install - `php artisan redline:install` owns the initial setup and adds the hook
+afterwards.
+
+> Adding or removing the entry re-encodes your whole `composer.json` in
+> Composer's own pretty format: indentation (4 spaces), spacing and the trailing
+> newline are normalized, while key order and every value are preserved.
+
+- **Pre-existing installs** - `redline:update` offers to add the hook (default
+  **Yes**); answering no just leaves it for a later run.
+- **Opting out of execution** - set `REDLINE_SKIP_UPDATE_HOOK=true`
+  (see [Configuration](03-configuration.md)) to keep the entry but skip the run.
+- **Removal** - `redline:remove` deletes only the Redline entry, leaving any
+  other `post-package-update` listener intact.
 
 ## Uninstalling
 
@@ -149,9 +192,10 @@ php artisan redline:remove
 1. **Removes storage** - deletes `storage/app/redline/` (refuses to delete anything outside `storage/app`).
 2. **Removes published assets** - `public/vendor/redline/`.
 3. **Removes published config and mail views** - `config/redline.php` and `resources/views/vendor/redline/`.
-4. **Strips `REDLINE_*` entries** from `.env`.
-5. **Scans for manual clean-ups** - searches your project's `*.php` files (excluding `vendor`, `node_modules`, `storage`, `bootstrap/cache`) for `ShowRedlineWidget`, `Zipavlin\Redline` and `RedlineServiceProvider` references and lists each match for you to remove by hand (e.g. a manually registered provider in `bootstrap/providers.php`).
-6. **Optionally removes the package** - asks whether to run `composer remove zipavlin/redline`; with `--force` the prompt is skipped and the package is removed automatically. If the automatic removal fails it prints the manual `composer remove` command.
+4. **Removes the composer hook** - drops only the Redline `post-package-update` entry from `composer.json` (any other listener survives); a missing or unreadable `composer.json` only warns.
+5. **Strips `REDLINE_*` entries** from `.env`.
+6. **Scans for manual clean-ups** - searches your project's `*.php` files (excluding `vendor`, `node_modules`, `storage`, `bootstrap/cache`) for `ShowRedlineWidget`, `Zipavlin\Redline` and `RedlineServiceProvider` references and lists each match for you to remove by hand (e.g. a manually registered provider in `bootstrap/providers.php`).
+7. **Optionally removes the package** - asks whether to run `composer remove zipavlin/redline`; with `--force` the prompt is skipped and the package is removed automatically. If the automatic removal fails it prints the manual `composer remove` command.
 
 After it finishes, check your app boots cleanly without the package.
 

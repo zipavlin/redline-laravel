@@ -67,14 +67,19 @@ class StorageProvider
     /**
      * Create schema automatically for in-memory databases (testing).
      * For file-based databases, tables must exist (created by redline:install).
+     *
+     * Migration drift is deliberately not checked here: boot only proves the
+     * database was installed, never that its schema is current (a stale install
+     * must not take down a staging site). Keeping it current is redline:update's
+     * job - normally run automatically by the composer `post-package-update`
+     * listener (see ComposerHook).
      */
     private function ensureSchema(): void
     {
         $db = config('database.connections.redline.database', '');
 
         if ($db === ':memory:') {
-            if (! Schema::connection('redline')->hasTable('redline_reports')
-                || ! Schema::connection('redline')->hasTable('redline_members')) {
+            if (! Schema::connection('redline')->hasTable('redline_reports')) {
                 $this->runMigrations();
             }
 
@@ -93,31 +98,6 @@ class StorageProvider
         if (! Schema::connection('redline')->hasTable('redline_reports')) {
             throw new \RuntimeException(
                 'Redline database tables not found. Run `php artisan redline:install` to set up the database.'
-            );
-        }
-
-        // An install predating 0006 has reports but not members; surface the
-        // upgrade instead of letting every membership query fail at runtime.
-        if (! Schema::connection('redline')->hasTable('redline_members')) {
-            throw new \RuntimeException(
-                'Redline database is missing the redline_members table. Run `php artisan redline:install` to migrate it.'
-            );
-        }
-
-        // An install predating 0007 has reports and members but not the priority
-        // column; surface the upgrade instead of letting priority reads fail at runtime.
-        if (! Schema::connection('redline')->hasColumn('redline_reports', 'priority')) {
-            throw new \RuntimeException(
-                'Redline database is missing the priority column. Run `php artisan redline:update` to migrate it.'
-            );
-        }
-
-        // Same upgrade guard for 0009's due_at - it is a serialized base row field,
-        // so a missing column would otherwise break every report read, not just ones
-        // that filter on deadlines.
-        if (! Schema::connection('redline')->hasColumn('redline_reports', 'due_at')) {
-            throw new \RuntimeException(
-                'Redline database is missing the due_at column. Run `php artisan redline:update` to migrate it.'
             );
         }
     }

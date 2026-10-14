@@ -113,6 +113,28 @@ function ensureRedlineDirectories(): void
 }
 
 /**
+ * Write a throwaway composer.json under storage/app and return its path, so
+ * command tests never rewrite the skeleton's own composer.json.
+ */
+function composerJsonFixture(string $contents = '{}'): string
+{
+    $path = storage_path('app/composer-json-'.uniqid().'.json');
+    file_put_contents($path, $contents);
+
+    return $path;
+}
+
+/**
+ * Delete every composer.json fixture a test left behind.
+ */
+function cleanComposerJsonFixtures(): void
+{
+    foreach (glob(storage_path('app/composer-json-*')) ?: [] as $file) {
+        @unlink($file);
+    }
+}
+
+/**
  * Swap the default mailer's transport for one that always throws, so mail
  * flows can be exercised through their failure path without a real SMTP
  * connection.

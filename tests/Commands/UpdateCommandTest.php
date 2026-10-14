@@ -1,8 +1,11 @@
 <?php
 
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Zipavlin\Redline\Commands\UpdateCommand;
+use Zipavlin\Redline\Support\ComposerScripts;
 
 /**
  * redline:update upgrades an already-installed Redline: it runs only the package
@@ -25,7 +28,38 @@ afterEach(function () {
     if (is_dir($mailViews)) {
         app('files')->deleteDirectory($mailViews);
     }
+
+    cleanComposerJsonFixtures();
 });
+
+/**
+ * Bind a command instance whose composer.json hook writes go to a temp fixture
+ * (testbench's base_path lives inside vendor, so the skeleton's own
+ * composer.json must never be written).
+ */
+function fakeUpdateCommand(string $composerJsonPath): UpdateCommand
+{
+    $command = new class($composerJsonPath) extends UpdateCommand
+    {
+        public function __construct(public string $composerJsonPath)
+        {
+            parent::__construct();
+        }
+
+        protected function composerJsonPath(): string
+        {
+            return $this->composerJsonPath;
+        }
+    };
+
+    app()->instance(UpdateCommand::class, $command);
+
+    // The Artisan console app is built during app boot with real command
+    // instances; rebuild it so the fake above is the one registered by name.
+    app(Kernel::class)->setArtisan(null);
+
+    return $command;
+}
 
 it('is registered, reports the version and re-publishes assets', function () {
     // The testbench build has no released version, so getVersion() mints a
@@ -113,6 +147,7 @@ it('leaves a published config alone when the re-publish prompt is declined', fun
 
     $this->artisan('redline:update')
         ->expectsConfirmation('Re-publish config/redline.php? This overwrites your edits.', 'no')
+        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'no')
         ->assertExitCode(0);
 
     expect(file_get_contents($path))->toContain('host-customised');
@@ -124,6 +159,7 @@ it('overwrites a published config when the re-publish prompt is answered yes', f
 
     $this->artisan('redline:update')
         ->expectsConfirmation('Re-publish config/redline.php? This overwrites your edits.', 'yes')
+        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'no')
         ->assertExitCode(0);
 
     expect(file_get_contents($path))->not->toContain('host-customised');
@@ -146,6 +182,7 @@ it('overwrites a published mail view when the re-publish prompt is answered yes'
 
     $this->artisan('redline:update')
         ->expectsConfirmation('Re-publish mail views? This overwrites your edits.', 'yes')
+        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'no')
         ->assertExitCode(0);
 
     $source = dirname(__DIR__, 2).'/resources/views/mail/new-report.blade.php';
@@ -175,4 +212,57 @@ it('keeps two backups made within the same second from colliding', function () {
     foreach (glob($database.'*') ?: [] as $file) {
         @unlink($file);
     }
+});
+
+it('adds the composer hook when the update prompt is answered yes', function () {
+    $command = fakeUpdateCommand(composerJsonFixture('{}'));
+
+    $this->artisan('redline:update')
+        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'yes')
+        ->expectsOutputToContain('Added the composer post-package-update hook.')
+        ->assertExitCode(0);
+
+    $decoded = json_decode((string) file_get_contents($command->composerJsonPath), true);
+
+    expect($decoded['scripts']['post-package-update'])->toBe([ComposerScripts::UPDATE_HOOK]);
+});
+
+it('leaves composer.json alone when the update prompt is declined', function () {
+    $command = fakeUpdateCommand(composerJsonFixture('{}'));
+
+    $this->artisan('redline:update')
+        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'no')
+        ->expectsOutputToContain('re-run `php artisan redline:update` to add it')
+        ->assertExitCode(0);
+
+    expect(file_get_contents($command->composerJsonPath))->toBe('{}');
+});
+
+it('leaves composer.json alone under --force and reports the skip', function () {
+    $command = fakeUpdateCommand(composerJsonFixture('{}'));
+
+    $this->artisan('redline:update --force')
+        ->expectsOutputToContain('--force: skipped the composer post-package-update hook')
+        ->assertExitCode(0);
+
+    expect(file_get_contents($command->composerJsonPath))->toBe('{}');
+});
+
+it('reports the composer hook as already present without prompting', function () {
+    $command = fakeUpdateCommand(composerJsonFixture((string) json_encode([
+        'scripts' => ['post-package-update' => [ComposerScripts::UPDATE_HOOK]],
+    ], JSON_PRETTY_PRINT)));
+
+    $this->artisan('redline:update')
+        ->expectsOutputToContain('Composer post-package-update hook already present.')
+        ->doesntExpectOutputToContain('Set up Redline to update automatically on package updates?')
+        ->assertExitCode(0);
+
+    expect(file_get_contents($command->composerJsonPath))->toContain('ComposerHook::postPackageUpdate');
+});
+
+it('reports the missing composer hook in dry-run mode', function () {
+    $this->artisan('redline:update --dry-run')
+        ->expectsOutputToContain('The composer post-package-update hook is missing')
+        ->assertExitCode(0);
 });

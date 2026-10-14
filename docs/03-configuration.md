@@ -49,6 +49,7 @@ These knobs are read directly via `env()` in package code and **never appear in 
 | `REDLINE_BOOTSTRAP_THROTTLE` | `120` | Per-minute per-IP rate limit on the public bootstrap endpoint, backing the `redline-bootstrap` limiter. Generous on purpose: the widget fetches it on every host page load. |
 | `REDLINE_GUARD_ALLOWED_IPS` | *(none)* | Comma-separated client-IP allowlist for `Zipavlin\Redline\Providers\Guard\IpGuardProvider` - active only when the client IP intersects the list. Read in the provider itself, so it applies even when `REDLINE_GUARD_PROVIDER` is omitted (default guard ignores it). |
 | `REDLINE_VITE_URL` | *(none)* | Dev-only: base URL of the Vite dev server; the package appends `:5173` to it and serves the frontend from there instead of the published assets. Set only in local development. |
+| `REDLINE_SKIP_UPDATE_HOOK` | *(none)* | When truthy, the composer `post-package-update` listener (`Zipavlin\Redline\ComposerHook`) skips running `php artisan redline:update --force` after a `composer update`. Parsed with `FILTER_VALIDATE_BOOLEAN`, so `1`, `true`, `yes` and `on` all skip; unset, `0` and `false` do not. The `composer.json` entry itself is left in place - see [Installation](02-installation.md#automatic-updates-via-composer). |
 
 ## Optional host-side knobs
 

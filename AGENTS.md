@@ -47,7 +47,7 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-`vendor/bin/pest` reports **340 passed, 0 skipped (1013 assertions)**. The package has a
+`vendor/bin/pest` reports **473 passed, 0 skipped (1526 assertions)**. The package has a
 single storage backend, so there are no environment-dependent skips.
 
 ## Architecture
@@ -60,7 +60,7 @@ config and no custom-provider seam.
 
 | Provider | Backing | Notes |
 |---|---|---|
-| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0006_`. **Not** auto-migrated at runtime: for a file database it throws a `RuntimeException` telling you to run `php artisan redline:install` when tables are missing. In-memory test databases migrate automatically. |
+| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0009_`. **Not** auto-migrated at runtime: for a file database boot only verifies the file exists and `redline_reports` is present (a `RuntimeException` pointing at `php artisan redline:install` otherwise). It does **not** check per-migration drift - keeping an installed schema current is `redline:update`'s job, wired as a composer `post-package-update` listener (`Zipavlin\Redline\ComposerHook`, `REDLINE_SKIP_UPDATE_HOOK` opts out). In-memory test databases migrate automatically. |
 
 ### Query grammar - `src/Http/Query/`
 
@@ -182,20 +182,31 @@ from element attributes.
 ### Artisan commands (only these exist)
 
 - `redline:install` - interactive setup (auth provider, email, disabled
-  features, writes `.env`, publishes config+assets; it also creates the SQLite
-  schema).
+  features, writes `.env`, publishes config+assets, adds the composer
+  `post-package-update` hook to the host composer.json; it also creates the
+  SQLite schema).
 - `redline:update` (alias `redline:upgrade`) - upgrade an installed Redline: run
   pending package migrations, re-publish assets, offer config/mail re-publish
-  (never clobbered under `--force`); flags `--force`, `--dry-run`, `--no-backup`.
+  and the composer `post-package-update` hook (neither clobbered under `--force`);
+  flags `--force`, `--dry-run`, `--no-backup`.
 - `redline:user` - create/edit/promote users directly in storage (create blocked under `LaravelAuthProvider`); flags `--promote`, `--edit` (mutually exclusive).
-- `redline:remove` - wipe all redline data, removes redline from the project.
+- `redline:remove` - wipe all redline data (including the composer hook entry), removes redline from the project.
+
+The host-side `post-package-update` listener lives in `src/ComposerHook.php` and the
+composer.json writer shared by all three commands in `src/Support/ComposerScripts.php`.
+`ComposerHook` duck-types the Composer event (`object $event`, never a `Composer\Script\*`
+type hint) because `composer/composer` is not installed here; it runs
+`php artisan redline:update --force` through `symfony/process` and never fails
+`composer update`.
 
 `redline:list` and `redline:dev` were removed; do not document them.
 
 ## Testing quirks
 
 - Pest helpers in `tests/Pest.php`: `makeReportData()`, `makeUser()`, `makeAuthToken()`,
-  `authHeaders()`, `cleanDatabaseStorage()`, `ensureRedlineDirectories()`.
+  `authHeaders()`, `cleanDatabaseStorage()`, `ensureRedlineDirectories()`,
+  `composerJsonFixture()` / `cleanComposerJsonFixtures()` (throwaway host composer.json
+  fixtures - the command tests must never write testbench's own composer.json).
 - Each test gets a fresh in-memory SQLite database (Orchestra Testbench;
   `database.connections.redline` pre-set to `:memory:`).
 - `tests/TestCase.php` boots with `APP_ENV=staging` + `app.debug=true`, re-wires the
@@ -211,8 +222,9 @@ from element attributes.
 - PHP: PSR-4 `Zipavlin\Redline\` → `src/`; tests `Zipavlin\Redline\Tests\` → `tests/`.
 - Linting: Pint (Laravel defaults; no custom `pint.json`).
 - EditorConfig: LF line endings, 4-space indent, UTF-8.
-- Migrations numbered (`0001_`–`0006_`) in `database/redline/`, not timestamped; created
-  by `redline:install` for file databases, auto-run for in-memory test DBs.
+- Migrations numbered (`0001_`–`0009_`) in `database/redline/`, not timestamped; created
+  by `redline:install` for file databases, auto-run for in-memory test DBs. `ensureSchema()`
+  never checks for per-migration drift - never add a per-migration guard there.
 - Built IIFE bundles in `public/` **are committed**.
 - Public assets tag: `php artisan vendor:publish --tag=redline-assets` (also
   `redline-config`, `redline-mail-views`).

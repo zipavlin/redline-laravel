@@ -35,10 +35,10 @@ it('boot() throws a friendly RuntimeException when the database file is missing'
 });
 
 // ---------------------------------------------------------------------------
-// boot() - missing priority column
+// boot() - migration drift
 // ---------------------------------------------------------------------------
 
-it('boot() throws a friendly RuntimeException when the priority column is missing', function () {
+it('boot() does not check for per-migration drift', function () {
     $database = sys_get_temp_dir().DIRECTORY_SEPARATOR.'redline-storage-'.uniqid().'.db';
     touch($database);
 
@@ -52,44 +52,16 @@ it('boot() throws a friendly RuntimeException when the priority column is missin
         '--force' => true,
     ]);
 
-    Schema::connection('redline')->table('redline_reports', function ($table): void {
-        $table->dropIndex(['priority']);
-        $table->dropColumn('priority');
-    });
-
-    expect(fn () => $this->provider->boot())
-        ->toThrow(RuntimeException::class, 'missing the priority column');
-
-    foreach (glob($database.'*') ?: [] as $file) {
-        @unlink($file);
-    }
-});
-
-// ---------------------------------------------------------------------------
-// boot() - missing due_at column
-// ---------------------------------------------------------------------------
-
-it('boot() throws a friendly RuntimeException when the due_at column is missing', function () {
-    $database = sys_get_temp_dir().DIRECTORY_SEPARATOR.'redline-storage-'.uniqid().'.db';
-    touch($database);
-
-    config(['database.connections.redline.database' => $database]);
-    DB::purge('redline');
-
-    Artisan::call('migrate', [
-        '--path' => dirname(__DIR__, 2).'/database/redline',
-        '--database' => 'redline',
-        '--realpath' => true,
-        '--force' => true,
-    ]);
-
+    // Simulate an install predating 0006 and 0009: boot must still succeed,
+    // because keeping an installed schema current is redline:update's job
+    // (wired as the composer post-package-update listener), not boot's.
+    Schema::connection('redline')->drop('redline_members');
     Schema::connection('redline')->table('redline_reports', function ($table): void {
         $table->dropIndex(['due_at']);
         $table->dropColumn('due_at');
     });
 
-    expect(fn () => $this->provider->boot())
-        ->toThrow(RuntimeException::class, 'missing the due_at column');
+    expect(fn () => $this->provider->boot())->not->toThrow(Throwable::class);
 
     foreach (glob($database.'*') ?: [] as $file) {
         @unlink($file);

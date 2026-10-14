@@ -7,6 +7,7 @@ use RuntimeException;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Process;
 use Throwable;
+use Zipavlin\Redline\Support\ComposerScripts;
 
 class RemoveCommand extends Command
 {
@@ -26,6 +27,7 @@ class RemoveCommand extends Command
             $this->removeStorage();
             $this->removeAssets();
             $this->removeConfig();
+            $this->removeComposerHook();
             $this->removeEnvEntries();
             $this->scanForManualRemovals();
 
@@ -131,6 +133,31 @@ class RemoveCommand extends Command
         } else {
             $this->line('  <fg=yellow>⚠</> No published mail views found at: '.$viewsPath);
         }
+    }
+
+    /**
+     * Drop the composer `post-package-update` hook. Runs before removePackage()
+     * on purpose: `composer remove zipavlin/redline` rewrites composer.json and
+     * would drop the entry with the rest of the package anyway. Failures only
+     * warn - removal must always complete.
+     */
+    protected function removeComposerHook(): void
+    {
+        $this->info('Removing composer hook');
+
+        if (! is_file($this->composerJsonPath())) {
+            $this->line('  <fg=yellow>⚠</> No composer.json found - skipping the post-package-update hook.');
+
+            return;
+        }
+
+        if ((new ComposerScripts($this->composerJsonPath()))->removeUpdateHook()) {
+            $this->line('  <fg=green>✓</> Composer post-package-update hook removed from composer.json.');
+
+            return;
+        }
+
+        $this->line('  <fg=yellow>⚠</> No Redline composer post-package-update hook found in composer.json.');
     }
 
     protected function removeEnvEntries(): void
@@ -242,6 +269,15 @@ class RemoveCommand extends Command
     protected function envPath(): string
     {
         return base_path('.env');
+    }
+
+    /**
+     * Path to the HOST composer.json. A seam for tests, which must never
+     * rewrite the skeleton's own composer.json.
+     */
+    protected function composerJsonPath(): string
+    {
+        return base_path('composer.json');
     }
 
     /**

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use Throwable;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
+use Zipavlin\Redline\Support\ComposerScripts;
 
 class UpdateCommand extends Command
 {
@@ -60,6 +61,7 @@ class UpdateCommand extends Command
             $this->republishMailViews(),
         ]));
         $this->clearCaches();
+        $this->handleComposerHook();
         $this->summarize($version, $pending, $untouched);
 
         return self::SUCCESS;
@@ -147,6 +149,15 @@ class UpdateCommand extends Command
         return realpath(__DIR__.'/../../database/redline') ?: __DIR__.'/../../database/redline';
     }
 
+    /**
+     * Path to the HOST composer.json. A seam for tests, which must never
+     * rewrite the skeleton's own composer.json.
+     */
+    protected function composerJsonPath(): string
+    {
+        return base_path('composer.json');
+    }
+
     private function printBanner(string $version): void
     {
         $this->line('');
@@ -196,6 +207,12 @@ class UpdateCommand extends Command
 
         if (is_dir(resource_path('views/vendor/redline/mail'))) {
             $this->line('   - Published mail views detected (would offer to re-publish).');
+        }
+
+        if ((new ComposerScripts($this->composerJsonPath()))->hasUpdateHook()) {
+            $this->line('   - The composer post-package-update hook is present.');
+        } else {
+            $this->line('   - The composer post-package-update hook is missing (would offer to add it).');
         }
 
         $this->line('');
@@ -355,6 +372,43 @@ class UpdateCommand extends Command
         $this->line('  <fg=green>✓</> Mail views re-published.');
 
         return null;
+    }
+
+    /**
+     * Offer the composer `post-package-update` hook so future `composer update`
+     * runs apply Redline updates automatically (see ComposerHook). Accepted by
+     * default because it only affects later updates; never written under
+     * --force, mirroring republishConfig()/republishMailViews().
+     */
+    private function handleComposerHook(): void
+    {
+        $scripts = new ComposerScripts($this->composerJsonPath());
+
+        if ($scripts->hasUpdateHook()) {
+            $this->line('  <fg=yellow>•</> Composer post-package-update hook already present.');
+
+            return;
+        }
+
+        if ($this->option('force')) {
+            $this->line('  <fg=yellow>•</> --force: skipped the composer post-package-update hook.');
+
+            return;
+        }
+
+        if (! $this->confirm('Set up Redline to update automatically on package updates? (composer post-package-update hook)', true)) {
+            $this->line('  <fg=yellow>•</> Skipped - re-run `php artisan redline:update` to add it.');
+
+            return;
+        }
+
+        if ($scripts->addUpdateHook()) {
+            $this->line('  <fg=green>✓</> Added the composer post-package-update hook.');
+
+            return;
+        }
+
+        $this->warn('  <fg=yellow>⚠</> Could not write the composer post-package-update hook to composer.json.');
     }
 
     /**

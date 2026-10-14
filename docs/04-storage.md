@@ -32,10 +32,11 @@ is already configured (the test suite injects `:memory:` this way).
 
 ### Migrations
 
-- Schema lives in numbered migrations `database/redline/0001_…0006_`
-  (`0001_create_redline_users_table` … `0006_create_redline_members_table`) -
+- Schema lives in numbered migrations `database/redline/0001_…0009_`
+  (`0001_create_redline_users_table` … `0009_add_due_at_to_redline_reports_table`) -
   numbered, **not** timestamped.
-- For a file database the schema is **not** migrated at runtime. If the database
+- For a file database the schema is **not** migrated at runtime. Boot only proves
+  Redline was installed - it does **not** check per-migration drift. If the database
   file is missing, boot throws:
 
   > `RuntimeException: Redline database not found at [storage/app/redline/database/redline.db]. Run \`php artisan redline:install\` to set up the database.`
@@ -44,16 +45,19 @@ is already configured (the test suite injects `:memory:` this way).
 
   > `RuntimeException: Redline database tables not found. Run \`php artisan redline:install\` to set up the database.`
 
-  and if the file exists but the `redline_members` table is absent:
-
-  > `RuntimeException: Redline database is missing the redline_members table. Run \`php artisan redline:install\` to migrate it.`
-
   `redline:install` creates the schema by running `php artisan migrate
   --path=vendor/zipavlin/redline/database/redline --database=redline`. On an
-already-installed host, `php artisan redline:update` applies only the
-pending package migrations (with a pre-migration SQLite backup), then
-re-publishes assets and clears stale caches - see
-[Commands](08-commands.md#redlineupdate).
+  already-installed host, `php artisan redline:update` applies only the
+  pending package migrations (with a pre-migration SQLite backup), then
+  re-publishes assets and clears stale caches - see
+  [Commands](08-commands.md#redlineupdate). The installer registers
+  `redline:update` as a composer `post-package-update` listener, so a plain
+  `composer update` runs it automatically (`REDLINE_SKIP_UPDATE_HOOK` opts out).
+- **A stale-but-installed database boots.** Since boot checks only the base table,
+  an install predating a later migration - a missing `redline_members` table, a
+  missing `priority` or `due_at` column - no longer throws at boot. Keeping the
+  schema current therefore relies entirely on `redline:update` having run; run it
+  (or let the composer hook run it) after every package upgrade.
 - In-memory databases (`:memory:`) auto-migrate at boot - this is how the
   package's own test suite gets its schema.
 

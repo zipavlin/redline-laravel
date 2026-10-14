@@ -16,6 +16,7 @@ use Zipavlin\Redline\Providers\Auth\PinAuthProvider;
 use Zipavlin\Redline\Providers\Guard\GuardProvider;
 use Zipavlin\Redline\Providers\Guard\IpGuardProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
+use Zipavlin\Redline\Support\ComposerScripts;
 
 class InstallCommand extends Command
 {
@@ -41,6 +42,7 @@ class InstallCommand extends Command
         // Support
         $this->handleEmailSetup($auth);
         $this->handleAssetsAndConfig();
+        $this->handleComposerHook();
         $this->handleFirstUser();
 
         return self::SUCCESS;
@@ -406,6 +408,30 @@ class InstallCommand extends Command
     }
 
     /**
+     * Register the composer `post-package-update` hook, so future
+     * `composer update` runs apply Redline updates automatically (see
+     * ComposerHook). Never prompts and never fails the install - an unusual
+     * composer.json only warns, and redline:update can add it later.
+     */
+    private function handleComposerHook(): void
+    {
+        $this->line('  <options=bold>Composer updates</>');
+
+        $scripts = new ComposerScripts($this->composerJsonPath());
+
+        if ($scripts->hasUpdateHook()) {
+            $this->line('  <fg=yellow>•</> Composer post-package-update hook already present in composer.json.');
+        } elseif ($scripts->addUpdateHook()) {
+            $this->line('  <fg=green>✓</> Added the composer post-package-update hook to composer.json (runs redline:update automatically).');
+        } else {
+            $this->line('  <fg=yellow>⚠</> Could not add the composer post-package-update hook to composer.json.');
+            $this->line('  `redline:update` will offer to add it later.');
+        }
+
+        $this->line('');
+    }
+
+    /**
      * Handles the creation of the first admin user and outputs information to the console.
      */
     private function handleFirstUser(): void
@@ -512,6 +538,15 @@ class InstallCommand extends Command
             'database' => $dir.DIRECTORY_SEPARATOR.'redline.db',
             'foreign_key_constraints' => true,
         ]]);
+    }
+
+    /**
+     * Path to the HOST composer.json. A seam for tests, which must never
+     * rewrite the skeleton's own composer.json.
+     */
+    protected function composerJsonPath(): string
+    {
+        return base_path('composer.json');
     }
 
     /**
