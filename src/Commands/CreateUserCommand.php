@@ -26,6 +26,7 @@ class CreateUserCommand extends Command
 
         if ($this->option('promote') && $this->option('edit')) {
             $this->error('Use either --promote or --edit, not both.');
+
             return self::FAILURE;
         }
 
@@ -50,6 +51,7 @@ class CreateUserCommand extends Command
             (new StorageProvider)->boot();
         } catch (RuntimeException $e) {
             $this->error($e->getMessage());
+
             return false;
         }
 
@@ -110,6 +112,7 @@ class CreateUserCommand extends Command
 
         if ($name === '') {
             $this->error('Name is required.');
+
             return null;
         }
 
@@ -131,11 +134,13 @@ class CreateUserCommand extends Command
 
         if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->error('A valid email address is required.');
+
             return null;
         }
 
         if ($this->emailTakenByOther($email, $except)) {
             $this->error("A user with the email $email already exists.");
+
             return null;
         }
 
@@ -148,6 +153,7 @@ class CreateUserCommand extends Command
 
         if (! $password || strlen($password) < 6) {
             $this->error('Password must be at least 6 characters.');
+
             return null;
         }
 
