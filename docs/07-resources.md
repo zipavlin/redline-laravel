@@ -471,7 +471,7 @@ Response (`200`):
 ```json
 {
   "version": 2,
-  "features": ["screenshots", "videos", "files", "comments"],
+  "features": ["screenshots", "videos", "files", "comments", "mcp"],
   "capabilities": {
     "guest_reporting": false,
     "auth": {
@@ -496,9 +496,9 @@ Response (`200`):
 Field semantics:
 
 - `version` - capability-manifest version (constant `2`).
-- `features` - enabled feature names: all of `screenshots`, `videos`, `files`, `comments`
-  minus whatever `REDLINE_DISABLED` / `config('redline.disabled')` removes. The widget
-  hides the corresponding capture modes.
+- `features` - enabled feature names: only the values listed in
+  `REDLINE_FEATURES` / `config('redline.features')` (all five are off unless
+  listed). The widget hides the corresponding capture modes.
 - `capabilities.guest_reporting` - `REDLINE_AUTH_GUEST` (default false).
 - `capabilities.auth.*` - flags from the active `AuthProvider`: whether login and public
   registration are allowed, the registration form fields (`fields`), whether the caller
@@ -647,6 +647,7 @@ Filters:
 | `due_at` | date set (`eq`,`not`,`like`,`from`,`to`,`gt`,`gte`,`lt`,`lte`,`null`,`not_null`) | raw deadline column, stored UTC. `filter[due_at:null]=1` is the "no deadline" query; `:from`/`:to` are inclusive bounds |
 | `due` | `eq` only | virtual deadline state. `overdue` (deadline `< now`) and `due_soon` (deadline in `[now, now+24h)`) are **open reports only** - a resolved/done report's stale deadline never matches. `none` is the undated state (`whereNull('due_at')`) and is deliberately **not** status-scoped: it matches a report of any status that has no deadline. Any other value 422 |
 | `body` | string set | column filter |
+| `url` | string set | column filter |
 | `created_at` | date set (adds `from`,`to`,`gt`,`gte`,`lt`,`lte`) | inclusive bounds |
 | `location` | string set | column filter |
 | `author` | relation set (`eq`,`not`,`in`,`not_in`,`exists`) | bare = FK equality; `author.id:in=a,b`; `author.name:like` delegated to User's schema via `relatedFilters` (only `name` is reachable - `author.email:like` 422s) |

@@ -135,11 +135,13 @@ it('removes storage, published files and REDLINE_* env entries with --force', fu
         'MAIL_MAILER=resend',
         'REDLINE_AUTH_PIN_REPORTER=1234',
         'RESEND_API_KEY=re_abc',
-        'REDLINE_DISABLED=videos,files',
+        'REDLINE_FEATURES=videos,files',
     ]));
 
     $this->artisan('redline:remove', ['--force' => true])
         ->assertExitCode(0)
+        ->expectsOutputToContain('Removing storage - ALL Redline data')
+        ->expectsOutputToContain('redline_tokens')
         ->expectsOutputToContain('Redline storage removed')
         ->expectsOutputToContain('Published assets removed')
         ->expectsOutputToContain('Published config removed')
@@ -262,7 +264,7 @@ it('strips REDLINE_* lines and preserves surrounding formatting', function () {
         'MAIL_MAILER=resend',
         'REDLINE_AUTH_PIN_REPORTER=1234',
         'RESEND_API_KEY=re_abc',
-        'REDLINE_DISABLED=videos,files',
+        'REDLINE_FEATURES=videos,files',
         '',
     ]));
 

@@ -38,6 +38,7 @@ class User extends Model
     protected $hidden = [
         'password',
         'token_version',
+        'password_epoch',
     ];
 
     protected $casts = [
@@ -115,6 +116,27 @@ class User extends Model
     public function scopeWhereEmail(Builder $query, mixed $email): Builder
     {
         return $query->whereRaw('lower(email) = lower(?)', [self::normalizeEmail($email)]);
+    }
+
+    protected static function booted(): void
+    {
+        // The single choke point for password-epoch advancement: an UPDATE in
+        // which the password column changed IS a password change, whichever
+        // path wrote it (self/admin reset-password, redline:user --edit,
+        // first registration update). API tokens snapshot this value at
+        // creation, so the increment alone invalidates every older token.
+        // Logout and bumpTokenVersion() save without touching the password and
+        // must not - and do not - land here.
+        static::updating(function (self $user): void {
+            if ($user->isDirty('password')) {
+                $user->password_epoch = (int) ($user->password_epoch ?? 0) + 1;
+            }
+        });
+    }
+
+    public function tokens(): HasMany
+    {
+        return $this->hasMany(Token::class);
     }
 
     /**

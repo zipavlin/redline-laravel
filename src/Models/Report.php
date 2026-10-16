@@ -315,6 +315,7 @@ class Report extends Model
                     },
                 ),
                 'body' => new FilterField(operators: QueryOperator::string(), column: 'body'),
+                'url' => new FilterField(operators: QueryOperator::string(), column: 'url'),
                 'created_at' => new FilterField(operators: QueryOperator::date(), column: 'created_at'),
                 'due_at' => new FilterField(operators: QueryOperator::date(), column: 'due_at'),
                 'location' => new FilterField(operators: QueryOperator::string(), column: 'location'),

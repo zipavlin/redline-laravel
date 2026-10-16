@@ -1,6 +1,6 @@
 # Commands
 
-Redline ships exactly four artisan commands. They are registered **unconditionally** - in every
+Redline ships exactly six artisan commands. They are registered **unconditionally** - in every
 environment and regardless of guard, auth, or storage configuration - so setup and teardown always
 work, even before the package is "active" on a given host:
 
@@ -8,7 +8,9 @@ work, even before the package is "active" on a given host:
 |---|---|
 | `php artisan redline:install` | Interactive first-time setup |
 | `php artisan redline:update` | Upgrade an existing install to the package version |
+| `php artisan redline:enable` | List / enable / disable features (writes `REDLINE_FEATURES`) |
 | `php artisan redline:user` | Create a user directly, any role |
+| `php artisan redline:mcp` | Interactive MCP token wizard / create / list / revoke MCP API tokens |
 | `php artisan redline:remove` | Permanently remove Redline, its data, and (optionally) the package |
 
 Each invocation reads the current `.env` / published config at runtime, so whatever
@@ -65,17 +67,29 @@ Writes `REDLINE_GUARD_PROVIDER` with the selected provider's FQCN (Environment, 
 see the Guards chapter). The **IP** guard additionally asks for allowed IPs, comma-separated,
 written to `REDLINE_GUARD_ALLOWED_IPS`.
 
-### Step 4 - Disabled features
+### Step 4 - Features (opt-in)
 
 ```
 Features
-All features are enabled by default. Select any you want to disable.
-Which features should be disabled? (separate multiple with commas, or press Enter for none)
+Nothing is enabled by default. Select any you want to turn on.
+Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)
 ```
 
-The choices are exactly `screenshots`, `videos`, `files`, `comments`. An empty answer disables
-nothing. Only when you select at least one is `REDLINE_DISABLED` written, as a comma-separated
-list.
+The choices are exactly `screenshots`, `videos`, `files`, `comments`, `mcp`. An empty answer enables
+nothing. `REDLINE_FEATURES` is always written (even as an empty value) as a comma-separated
+list of the selected features.
+
+When the selection includes `mcp`, the command also points at the two steps an agent setup
+needs beyond the flag:
+
+```
+  • MCP server on - run php artisan redline:mcp: it issues a token and prints your agent's setup command
+    and point your MCP client at: https://staging.example.com/redline/api/mcp
+```
+
+(the endpoint is derived from `APP_URL` and `REDLINE_PATH`, never hardcoded). The full MCP
+setup - tokens, per-client configuration, revocation semantics - lives in "MCP server" in
+the README.
 
 ### Step 5 - Email setup
 
@@ -161,12 +175,93 @@ Next steps:
 | `REDLINE_AUTH_PIN_DEVELOPER` | Pin auth, PIN given | Developer registration PIN |
 | `REDLINE_AUTH_DOMAINS` | Domain auth | Comma-separated allowed email domains |
 | `REDLINE_GUARD_ALLOWED_IPS` | IP guard, IPs given | Comma-separated allowed IPs |
-| `REDLINE_DISABLED` | ≥ 1 feature selected | Comma-separated disabled features |
+| `REDLINE_FEATURES` | always | Comma-separated enabled features (empty = all off) |
 | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | Resend or SMTP chosen | Mail transport |
 | `RESEND_API_KEY` | Resend chosen, key given | Resend API key |
 
 It also publishes the selected config/assets, adds the composer `post-package-update` hook
 to `composer.json`, and creates the Redline SQLite schema on the `redline` connection.
+
+## redline:enable
+
+`php artisan redline:enable` lists or toggles the feature set. Features are **additive**:
+nothing is on until `REDLINE_FEATURES` names it.
+
+```bash
+php artisan redline:enable                  # list every feature + state
+php artisan redline:enable mcp comments     # enable (comma/space/repeated arguments)
+php artisan redline:enable --disable=mcp    # disable
+```
+
+The listing reads:
+
+```
+  Redline features - driven by REDLINE_FEATURES; every feature is off until it is listed:
+  screenshots disabled
+  videos     disabled
+  files      disabled
+  comments   disabled
+  mcp        disabled
+
+  Toggle with `php artisan redline:enable <names>` or `--disable=<names>`.
+```
+
+Toggles write the resulting set to `REDLINE_FEATURES` in fixed enum order and echo it
+(`✓ REDLINE_FEATURES=comments`, or `✓ REDLINE_FEATURES= (no features enabled)` for an empty
+set - the key is kept so the all-off state is explicit). An unknown feature name is an error
+(exit 1) and writes nothing:
+
+```
+  Unknown Redline feature(s): vidoes. Valid features: screenshots, videos, files, comments, mcp.
+```
+
+## redline:mcp
+
+`php artisan redline:mcp` manages the long-lived **MCP API tokens** (`rlm_` + 40 hex
+chars, sha-256-hashed in `redline_tokens`). Bare, it runs an **interactive
+wizard**: pick an approved non-guest user (a typed filter/exact-email fallback
+appears when the pool is over ~25), see the roster of that user's active tokens
+(`Add new token` or `Revoke a token`), then pick the agent preset - the
+command prints a ready-to-paste setup block for that agent with the real
+endpoint and token inline. The default token name is the selected agent's
+slug; `Other` asks for a typed name; an active token of the same name asks
+whether to **replace** (revoke, then mint) or **add**.
+
+The flags keep the classic non-interactive behaviour:
+
+```bash
+php artisan redline:mcp                       # interactive wizard (default)
+php artisan redline:mcp --user=me@example.com --name="Claude"
+php artisan redline:mcp --list --user=me@example.com       # name, hint, created, last used
+php artisan redline:mcp --revoke={id}                      # soft-revoke one token
+php artisan redline:mcp --revoke-all --user=me@example.com # revoke every token of a user
+```
+
+With `--name=` matching a known agent slug the create prints that agent's
+instruction block too. The roster (`--list`, also shown in the wizard) renders
+`name · ···<4-char hint> · created Y-m-d · last used Y-m-d` - the name column
+shows the humanized agent label when the name is a known agent slug. The hint
+(the last 4 characters of the plaintext) is an identification device only,
+never a credential.
+
+The plaintext is printed once, preceded by this warning (quoted verbatim, do not reword):
+
+> This token acts with the user's full permissions - treat it as a password;
+> it is NOT invalidated by logout; it IS invalidated by that user's password change.
+
+- Guest and pending users are refused (no token is ever issued to them).
+- A password change by the owner invalidates every outstanding token (per-user
+  `password_epoch` snapshotted at creation); logout does not.
+- `redline:remove` destroys the token table with the rest of the host database.
+- The same bearer works on the whole REST surface, including screenshot/video binary
+  URLs; it is never accepted from a cookie or a query string.
+- Every client preset sends the `Authorization` header per request on the
+  streamable-HTTP transport, which is why Redline never accepts an `rlm_`
+  token from a cookie - none of the listed clients ever send `rlm_` via
+  cookies.
+
+See "MCP server" in the README for per-client configuration (Claude Code,
+OpenCode, Codex, PI, Cursor, VS Code and Gemini CLI).
 
 ## redline:update
 
@@ -371,10 +466,12 @@ by hand. With `--force`, this prompt is skipped and the package is removed autom
 
 | Command | Purpose | Flags |
 |---|---|---|
-| `redline:install` | Interactive setup: storage, auth, guard, features, email; writes `.env`, publishes config/assets, adds the composer `post-package-update` hook, creates DB schema, first admin | - |
-| `redline:update` (alias `redline:upgrade`) | Upgrade an existing install: preflight check, pending migrations (+ SQLite backup), assets re-published with `--force`, optional config/mail re-publish, composer hook offer, cache clears | `-F`, `--force` - non-interactive; published config/mail views and the composer hook left untouched; `--dry-run` - report only; `--no-backup` - skip backup |
+| `redline:install` | Interactive setup: storage, auth, guard, features, email; writes `.env`, publishes config/assets, adds the composer `post-package-update` hook, creates DB schema, first admin; prints the MCP token/endpoint hints when `mcp` was selected | - |
+| `redline:update` (alias `redline:upgrade`) | Upgrade an existing install: preflight check, pending migrations (+ SQLite backup), assets re-published with `--force`, optional config/mail re-publish, composer hook offer, cache clears; prints the current feature state | `-F`, `--force` - non-interactive; published config/mail views and the composer hook left untouched; `--dry-run` - report only; `--no-backup` - skip backup |
+| `redline:enable` | List every feature + state; enable/disable by name in fixed enum order; writes `REDLINE_FEATURES` (key kept even when all off); unknown name exits 1 writing nothing | `feature*` (positional, comma/space separated); `-D`, `--disable=*` |
 | `redline:user` | Create/edit/promote a user directly in storage; bypasses auth-provider policies (password min 6) | `--promote`, `--edit` (mutually exclusive) |
-| `redline:remove` | Wipe all Redline data, published assets/config, the composer hook and `REDLINE_*` `.env` entries; scan for manual references; optionally `composer remove zipavlin/redline` | `-F`, `--force` - skip all confirmations (including package removal) |
+| `redline:mcp` | Interactive MCP-token wizard plus create/list/revoke (`redline_tokens`); refuses pending/guest owners; plaintext shown once; roster carries a 4-char identification hint | bare = wizard, `--name=`, `--user=`, `--list`, `--revoke={id}`, `--revoke-all` (needs `--user=`) |
+| `redline:remove` | Wipe all Redline data (including `redline_tokens`), published assets/config, the composer hook and `REDLINE_*` `.env` entries; scan for manual references; optionally `composer remove zipavlin/redline` | `-F`, `--force` - skip all confirmations (including package removal) |
 
 ## Related
 

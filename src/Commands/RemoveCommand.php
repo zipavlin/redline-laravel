@@ -65,7 +65,9 @@ class RemoveCommand extends Command
 
     protected function removeStorage(): void
     {
-        $this->info('Removing storage');
+        // Explicit, per the MCP contract's lifecycle table: the API-token
+        // table is hosted in this database, and wiping it revokes every token.
+        $this->info('Removing storage - ALL Redline data');
 
         $path = storage_path('app/'.config('redline.storage.path.base'));
         $resolved = realpath($path);
@@ -92,6 +94,9 @@ class RemoveCommand extends Command
 
         $this->deleteDirectory($resolved);
 
+        // The claim follows the actual deletion - never printed for a path
+        // that could not be removed.
+        $this->line('  Destroyed: users, reports, comments, media and the API-token table (redline_tokens)');
         $this->line('  <fg=green>✓</> Redline storage removed ('.$resolved.')');
     }
 

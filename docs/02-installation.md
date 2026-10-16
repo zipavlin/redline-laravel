@@ -63,7 +63,7 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
 
    Writes `REDLINE_GUARD_PROVIDER`, plus `REDLINE_GUARD_ALLOWED_IPS` for the IP guard.
 
-4. **Features** - *"All features are enabled by default. Select any you want to disable."* Multi-select from `screenshots`, `videos`, `files`, `comments`; pressing Enter without a selection disables nothing. Writes `REDLINE_DISABLED` only when something was selected.
+4. **Features** - *"Nothing is enabled by default. Select any you want to turn on."* Multi-select from `screenshots`, `videos`, `files`, `comments`, `mcp`; pressing Enter without a selection enables none. Writes `REDLINE_FEATURES` (always, even empty).
 
 5. **Email setup** - skipped entirely when a real mailer is already configured (default mailer is not `log`/`array`/`null` and `REDLINE_MAIL` is not `false`). Otherwise it warns - if the chosen auth provider verifies users by email (the **Domain** provider does), registration verification and password reset stay dead until a mailer exists; otherwise emails (password reset, new-report notifications) are simply skipped. Then it offers:
 
@@ -101,7 +101,7 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
 | `REDLINE_AUTH_DOMAINS` | `example.com,acme.org` | Allowed domains (Domain provider only) |
 | `REDLINE_GUARD_PROVIDER` | `Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider` | Guard provider FQCN |
 | `REDLINE_GUARD_ALLOWED_IPS` | `127.0.0.1` | Allowed IPs (IP guard only) |
-| `REDLINE_DISABLED` | `videos,files` | Features to disable |
+| `REDLINE_FEATURES` | `screenshots,comments` | Features to enable (additive - every other feature stays off) |
 | `MAIL_MAILER` / `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME` | - | Mailer config (Resend/SMTP step only) |
 | `RESEND_API_KEY` | `re_…` | Resend API key (Resend step only) |
 
