@@ -21,6 +21,19 @@ class LaravelGuardProvider extends GuardProvider implements Listable
     }
 
     /**
+     * The per-request RedlineActive predicate must not consult the session:
+     * it runs BEFORE the session stack (the api group nests that stack inside
+     * the middleware), so the session is never started yet at that point in
+     * the pipeline. This guard's activation is enforced per request in
+     * isActive() (ShowRedlineWidget + the dashboard shell gate), both of which
+     * run later behind the session stack.
+     */
+    public function shouldServeRoutes(Request $request): bool
+    {
+        return true;
+    }
+
+    /**
      * Always true: boot-time evaluation cannot see session state, because the
      * session middleware has not run yet at boot. The package must therefore always
      * wire up its routes and middleware; per-request enforcement happens in

@@ -33,3 +33,4 @@ phpstan.neon
 /.junie
 /.openchamber
 /opencode.json
+/.cortexkit

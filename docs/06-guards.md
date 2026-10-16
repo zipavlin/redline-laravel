@@ -7,7 +7,7 @@ This chapter covers the four built-in providers, how to exclude individual paths
 | Variable | Default | Purpose |
 |---|---|---|
 | `REDLINE_GUARD_PROVIDER` | `Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider` | Fully-qualified class name of the active guard provider |
-| `REDLINE_GUARD_EXCLUDE` | `null` (nothing excluded) | Comma-separated paths/globs where the widget and API are skipped |
+| `REDLINE_GUARD_EXCLUDE` | `null` (nothing excluded) | Comma-separated paths/globs where widget injection is skipped |
 | `REDLINE_GUARD_ALLOWED_IPS` | `''` (empty → never active) | Comma-separated IP allowlist for `IpGuardProvider` |
 
 ## What a guard controls
@@ -19,12 +19,13 @@ Part of the package is registered unconditionally; the guard only governs the re
 | `vendor:publish` tags (`redline-assets`, `redline-config`, `redline-mail-views`) | Yes | - |
 | Artisan commands (`redline:install`, `redline:update`, `redline:user`, `redline:remove`) | Yes (console) | - |
 | Dashboard SPA at `/{redline.path}` (default `/redline`) | No | `isActive` **and** request path starts with `redline.path` **and** storage is local |
-| API routes at `/{redline.path}/api/...` | No | `isActive` **and** not excluded **and** storage is local |
+| API routes at `/{redline.path}/api/...` | No | `shouldServeRoutes()` - for guards that keep the default this is just `isActive` - **and** storage is local |
+| MCP server endpoint at `/{redline.path}/api/mcp` | No | `shouldServeRoutes()` (the guard gate sits **first** in the MCP middleware chain, ahead of rate limiting and authentication) - **and** the `mcp` feature **and** storage is local |
 | Widget script injection into `web` responses | No | `isActive` **and** not excluded (re-checked per request) |
 
 When the guard is **inactive**, `RedlineServiceProvider::boot()` returns early right after registering publishing and commands: no storage provider boots, no views are loaded, no routes are registered, and `ShowRedlineWidget` is never appended to the `web` group. From the host app's point of view the package has no web surface at all.
 
-When the guard is **active**, two *independent* per-request decisions determine what loads (see [Dashboard vs widget gating](#dashboard-vs-widget-gating)). The key nuance: **exclusion applies only to the widget + API, never to the dashboard** - an active guard with an excluded path still serves the dashboard at `/redline`.
+When the guard is **active**, several *independent* per-request decisions determine what loads (see [Dashboard vs widget gating](#dashboard-vs-widget-gating)). The key nuance: **exclusion skips only widget injection - never the API and never the dashboard** - an active guard with an excluded path still serves the dashboard AND `/redline/api/*` at full strength.
 
 ## EnvironmentGuardProvider
 
@@ -67,7 +68,7 @@ FQCN: `Zipavlin\Redline\Providers\Guard\LaravelGuardProvider`.
 
 - **Activation:** `Auth::guard()->check()` - active only when the host application's Laravel user is logged in. Pair it with [`LaravelAuthProvider`](05-authentication.md#laravelauthprovider).
 - **Env knobs:** none beyond `REDLINE_GUARD_PROVIDER`.
-- **Deferred boot (`shouldLoadMiddleware()`):** boot runs before any middleware, so the session does not exist yet and `isActive()` cannot be evaluated. This guard overrides `shouldLoadMiddleware()` to return `true`, so the package always wires up its routes and middleware; the real decision is made **per request** in `isActive()`.
+- **Deferred boot (`shouldLoadMiddleware()`):** boot runs before any middleware, so the session does not exist yet and `isActive()` cannot be evaluated. This guard overrides `shouldLoadMiddleware()` AND `shouldServeRoutes()` to return `true` (the latter's per-request check runs before the session stack too, so it also cannot consult the session), so the package always wires up and serves its routes and middleware; the real decision is made **per request** in `isActive()`.
 - **Per-request enforcement:** `ShowRedlineWidget` re-checks `shouldShowWidget()` (so no widget injection for logged-out visitors) and the dashboard catch-all in `routes/web.php` aborts with **403** unless `shouldShowDashboard()` holds. The dashboard route therefore carries `EncryptCookies` + `StartSession` middleware so the session is available for the re-check.
 - **API routes stay JWT-only:** the guard does not gate `/api/*` per request - `RedlineApiAuth` is unchanged, so a valid redline JWT keeps working even if the host session has ended.
 - **Intended use:** private staging/preview environments where every tester already has a host-app login and no separate Redline identity is wanted.
@@ -78,7 +79,7 @@ REDLINE_GUARD_PROVIDER=Zipavlin\Redline\Providers\Guard\LaravelGuardProvider
 
 ## Excluding paths (REDLINE_GUARD_EXCLUDE)
 
-`REDLINE_GUARD_EXCLUDE` is a comma-separated list of path patterns where the **widget and API are skipped** - the dashboard is never affected (see [Dashboard vs widget gating](#dashboard-vs-widget-gating)). It only matters while the guard is active; an inactive guard has everything off anyway.
+`REDLINE_GUARD_EXCLUDE` is a comma-separated list of path patterns where the **widget injection is skipped** - the dashboard and the API are never affected (see [Dashboard vs widget gating](#dashboard-vs-widget-gating)). It only matters while the guard is active; an inactive guard has everything off anyway.
 
 Patterns and request paths are compared **without leading/trailing slashes**, and each pattern is trimmed the same way. There are three pattern forms:
 
@@ -91,10 +92,10 @@ Patterns and request paths are compared **without leading/trailing slashes**, an
 Concrete setups:
 
 ```dotenv
-# Exact + subpath: hide the whole admin area from the widget and API
+# Exact + subpath: keep the widget out of the whole admin area
 REDLINE_GUARD_EXCLUDE=admin
 
-# Subpath only: hide admin subpages but keep /admin itself widget-visible
+# Subpath only: keep the widget off admin subpages but keep /admin itself widget-visible
 REDLINE_GUARD_EXCLUDE=admin/*
 
 # Glob: exclude any path matching the pattern
@@ -111,14 +112,16 @@ Two details worth knowing:
 
 ## Dashboard vs widget gating
 
-Both decisions derive from the same `isActive()` answer but use different path logic. Both methods on `GuardProvider` are `final`:
+Four decisions spread over the same guard instance. All but one are `final` on `GuardProvider` (`shouldServeRoutes()` and `shouldLoadMiddleware()` are open to override - that is their whole reason to exist):
 
-- `shouldShowWidget(Request)` = `isActive` **AND NOT** `isExcluded` - gates the API routes and the `ShowRedlineWidget` middleware append.
+- `shouldServeRoutes(Request)` - default `isActive()`: may this request reach the package's routes (api + web + the MCP server endpoint) at all? Consulted by the `RedlineActive` middleware on the api + web surface and first in the MCP route's chain. Deliberately has NO widget-exclusion coupling. Guards whose activation cannot be evaluated in the middleware pipeline (a session guard cannot answer yet) override it to `true` and enforce per request through the checks that run later behind the session stack.
+- `shouldLoadMiddleware(Request)` - default `isActive() && !isExcluded()` (via `shouldShowWidget()`): the guard's boot-declared wiring decision, consulted by `RedlineServiceProvider` when appending widget injection to the `web` group. Folding in the exclusion list is correct here because at boot we are deciding whether to inject the widget, not whether to serve routes.
+- `shouldShowWidget(Request)` = `isActive` **AND NOT** `isExcluded` - gates the `ShowRedlineWidget` middleware append, re-checked per request inside the middleware.
 - `shouldShowDashboard(Request)` = `isActive` **AND** `isDashboard` - where `isDashboard` is a plain prefix check: the request path starts with `config('redline.path')` (default `redline`).
 
 Consequences:
 
-- **Active + excluded:** the dashboard at `/redline` is still served; the widget and `/redline/api/*` are not. Exclusion never "hides" the dashboard.
+- **Active + excluded:** the dashboard at `/redline` AND `/redline/api/*` are still served; the widget only disappears on the matching host paths. Exclusion never hides the package's own surface.
 - **Active + not excluded:** both the dashboard and the widget/API load (provided the storage provider is local - cloud storage defers the routes to cloud hosting; see [Storage](04-storage.md)).
 - The dashboard prefix check has no trailing-slash boundary, but since the dashboard route itself is registered under the `redline` prefix, only `/redline` and its subpaths are ever served.
 - `ShowRedlineWidget` re-checks `shouldShowWidget()` on every request as a safety net (the boot-time check already gates registration), and only injects into `text/html` responses that contain a `</body>` tag.
@@ -164,7 +167,7 @@ REDLINE_GUARD_PROVIDER=App\Redline\StagingSubdomainGuard
 Guidelines:
 
 - The provider is constructed with `new $class` as a singleton, with **no constructor arguments** - keep the constructor parameterless and resolve any dependencies with `app()` inside `isActive()`.
-- `shouldShowWidget()` and `shouldShowDashboard()` are `final`; override only `isActive()`. The protected `isExcluded()` / `isDashboard()` helpers can be overridden if you need different path semantics.
+- `shouldShowWidget()` and `shouldShowDashboard()` are `final`; override only `isActive()` (plus, if your guard cannot answer inside the middleware pipeline or at boot, `shouldServeRoutes()` / `shouldLoadMiddleware()`). The protected `isExcluded()` / `isDashboard()` helpers can be overridden if you need different path semantics.
 - Implement `Zipavlin\Redline\Contracts\Listable` (`title(): string`, `position(): int`, both static) so your guard appears by name in the `redline:install` guard chooser - optional, but keeps the interactive installer accurate.
 
 ## Custom Guard Provider

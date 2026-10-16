@@ -22,6 +22,21 @@ abstract class GuardProvider
     abstract public function isActive(Request $request): bool;
 
     /**
+     * Whether this request may reach the package's routes (api + web) at all.
+     *
+     * This is the per-request RedlineActive predicate, and it is deliberately
+     * NARROWER than shouldLoadMiddleware(): the `REDLINE_GUARD_EXCLUDE` list
+     * skips widget INJECTION on matching host paths - it never disables the
+     * package's own api + web surface (the dashboard especially must stay
+     * served on an excluded path). Guards that keep the default reduce this to
+     * isActive(); existing guards inherit it unchanged.
+     */
+    public function shouldServeRoutes(Request $request): bool
+    {
+        return $this->isActive($request);
+    }
+
+    /**
      * Whether the package should wire up its routes and middleware at boot.
      *
      * Boot runs before any middleware, so a guard whose activation depends on

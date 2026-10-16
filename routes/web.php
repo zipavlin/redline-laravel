@@ -5,13 +5,19 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Zipavlin\Redline\Http\Middleware\RedlineActive;
 use Zipavlin\Redline\Providers\Guard\GuardProvider;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
 
 Route::prefix(config('redline.path', 'redline'))
     ->name('redline.')
-    ->middleware([EncryptCookies::class, StartSession::class, SubstituteBindings::class])
+    // Intentional layering, not duplication: RedlineActive:403 is the guard's
+    // per-request half (kept alive under a route cache), while the shell
+    // closure's shouldShowDashboard() below adds the dashboard-specific
+    // predicate (isActive() && isDashboard()). The 403 status preserves the
+    // shell's documented per-request denial.
+    ->middleware([EncryptCookies::class, StartSession::class, SubstituteBindings::class, RedlineActive::class.':403'])
     ->group(function () {
         // Inject Vite URL and version into all views - we use both in the layout.
         View::share('vite', RedlineServiceProvider::getViteUrl('dashboard'));
