@@ -192,8 +192,8 @@ supported (no `relatedSchema` on that filter) and 422s, as intended.
   `src/Actions/ReportActions.php` +
   `CommentActions.php` write path that the HTTP controllers also use - controllers call
   the actions; failures are package exceptions in `src/Exceptions/` (ForbiddenAction /
-  FeatureDisabled / InvalidStatusTransition / ParentMismatch) that controllers map to
-  today's 403/404/422 envelopes and tools map to actionable MCP errors)
+  FeatureDisabled / InvalidStatusTransition, HTTP 403 by construction; a wrong parent is a plain
+  NotFoundHttpException) that the framework renders as 403/404 and tools map to actionable MCP errors)
   with group middleware `RedlineActive` → `RedlineMcpEnabled`, then
   `throttle:redline-mcp-ip` → `RedlineApiAuth` → `throttle:redline-mcp`, and no
   CSRF. Enforcement per-request: the `mcp`-feature check is GROUP middleware, so

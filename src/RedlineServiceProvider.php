@@ -5,11 +5,9 @@ namespace Zipavlin\Redline;
 use Composer\InstalledVersions;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Container\BindingResolutionException;
-use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Filesystem\Filesystem;
-use Illuminate\Foundation\Exceptions\Handler;
 use Illuminate\Http\Request;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Composer;
@@ -19,8 +17,6 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Laravel\Mcp\Facades\Mcp;
-use Symfony\Component\HttpKernel\Exception\HttpException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Zipavlin\Redline\Commands\CreateUserCommand;
 use Zipavlin\Redline\Commands\EnableCommand;
 use Zipavlin\Redline\Commands\InstallCommand;
@@ -28,8 +24,6 @@ use Zipavlin\Redline\Commands\McpCommand;
 use Zipavlin\Redline\Commands\RemoveCommand;
 use Zipavlin\Redline\Commands\UpdateCommand;
 use Zipavlin\Redline\Enums\Feature;
-use Zipavlin\Redline\Exceptions\ForbiddenAction;
-use Zipavlin\Redline\Exceptions\ParentMismatch;
 use Zipavlin\Redline\Http\Middleware\RedlineActive;
 use Zipavlin\Redline\Http\Middleware\RedlineApiAuth;
 use Zipavlin\Redline\Http\Middleware\RedlineMcpEnabled;
@@ -115,51 +109,6 @@ class RedlineServiceProvider extends ServiceProvider
         RateLimiter::for('redline-mcp', fn (Request $request) => Limit::perMinute(
             (int) env('REDLINE_MCP_THROTTLE', 120)
         )->by((string) ($request->user()?->id ?? $request->ip())));
-
-        // The Actions layer's domain exceptions render for the whole redline
-        // API group in ONE place, byte-identical to the `abort()` envelopes the
-        // controllers used to throw themselves: ForbiddenAction (the 403
-        // family - gate, disabled feature, invalid transition) keeps its exact
-        // message; ParentMismatch keeps the bare 404. The registered callback
-        // re-renders the equivalent Symfony exception through the default
-        // handler, so every response field (including debug extras) matches
-        // what abort() produced. MCP keeps its own error vocabulary: the
-        // endpoint is excluded from this renderer (its tools map the same
-        // exceptions to tool errors in Mcp\Concerns\CanMapActionErrors).
-        /** @var Handler $exceptionHandler */
-        $exceptionHandler = $this->app->make(ExceptionHandler::class);
-
-        // A host may bind a handler that has neither helper; the package's
-        // rendering and log filtering are best-effort additions, never a boot
-        // requirement.
-        if (! method_exists($exceptionHandler, 'renderable')) {
-            return;
-        }
-
-        // A 403/404 the package raises in normal operation is not an incident:
-        // without this every refusal would also log a stack trace through the
-        // host's exception log (ForbiddenAction covers the whole 403 family -
-        // the gate, a disabled feature, an invalid transition).
-        $exceptionHandler->dontReport([
-            ForbiddenAction::class,
-            ParentMismatch::class,
-        ]);
-
-        $exceptionHandler->renderable(function (ForbiddenAction|ParentMismatch $exception, Request $request) use ($exceptionHandler) {
-            if (! $request->is(config('redline.path', 'redline').'/api/*')
-                || $request->is(config('redline.path', 'redline').'/api/mcp*')) {
-                return null;
-            }
-
-            // The precise exception shape the controller's `abort()` used to
-            // throw: abort(403, message) => HttpException, abort(404) =>
-            // NotFoundHttpException with the same (empty) message.
-            $wrapped = $exception instanceof ParentMismatch
-                ? new NotFoundHttpException
-                : new HttpException(403, $exception->getMessage());
-
-            return $exceptionHandler->render($request, $wrapped);
-        });
 
         // Publishing is always available regardless of environment.
         $this->publishes([

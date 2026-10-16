@@ -3,11 +3,11 @@
 namespace Zipavlin\Redline\Actions;
 
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Enums\Operation;
 use Zipavlin\Redline\Exceptions\FeatureDisabled;
 use Zipavlin\Redline\Exceptions\ForbiddenAction;
-use Zipavlin\Redline\Exceptions\ParentMismatch;
 use Zipavlin\Redline\Models\Comment;
 use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\Screenshot;
@@ -19,12 +19,13 @@ use Zipavlin\Redline\Models\Video;
  * Screenshot, Video, Member, User), shared verbatim by the HTTP controllers
  * and the MCP tools (see the tool-facing error mapping in Mcp\Concerns).
  *
- * The layer is HTTP-agnostic: its authorization and build-time failures come
- * back as package domain exceptions (ForbiddenAction, FeatureDisabled,
- * ParentMismatch - see Exceptions/) which the redline API group renders in one
- * place (RedlineServiceProvider) and a tool maps to its own error vocabulary.
- * Laravel ValidationException (request validation, the query grammar) renders
- * through Laravel's own default path.
+ * The layer is HTTP-agnostic in what it asks of callers: its authorization and
+ * build-time failures are package exceptions (ForbiddenAction, FeatureDisabled,
+ * see Exceptions/, or a plain NotFoundHttpException for a wrong parent) that are
+ * HTTP 403/404 by construction, so
+ * the framework renders them for the controllers unchanged and a tool catches
+ * them to map to its own error vocabulary. Laravel ValidationException
+ * (request validation, the query grammar) renders through Laravel's own path.
  */
 abstract class Action
 {
@@ -59,7 +60,7 @@ abstract class Action
     protected function assertRelationship(Report|Screenshot $parent, Comment|Screenshot|Video $child): void
     {
         if ($child->report_id !== $parent->id) {
-            throw new ParentMismatch;
+            throw new NotFoundHttpException;
         }
     }
 

@@ -7,7 +7,6 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Support\ValidationMessages;
 use Zipavlin\Redline\Exceptions\ForbiddenAction;
 use Zipavlin\Redline\Exceptions\InvalidStatusTransition;
-use Zipavlin\Redline\Exceptions\ParentMismatch;
 
 /**
  * MCP tool plumbing: who is calling, and how the Actions layer's failures
@@ -27,7 +26,6 @@ trait CanMapActionErrors
      *  ValidationException          -> the 422-equivalent actionable text
      *  InvalidStatusTransition      -> 403-equivalent + the role's allowed targets
      *  ForbiddenAction (the family) -> the exact HTTP 403 vocabulary
-     *  ParentMismatch               -> 404-equivalent, the tool's not-found text
      *
      * @param  callable(): Response  $run
      */
@@ -38,8 +36,6 @@ trait CanMapActionErrors
         } catch (InvalidStatusTransition $exception) {
             return Response::error($exception->actionableMessage());
         } catch (ForbiddenAction $exception) {
-            return Response::error($exception->getMessage());
-        } catch (ParentMismatch $exception) {
             return Response::error($exception->getMessage());
         } catch (ValidationException $exception) {
             return Response::error(ValidationMessages::from($exception));

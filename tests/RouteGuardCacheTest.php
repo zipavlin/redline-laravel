@@ -133,13 +133,11 @@ it('the guard and the feature gate lead every shape laravel/mcp registers for th
 
 it('an active guard exposes the vendor shapes the guard group has to outrank', function () {
     // Documenting why the group wrap exists: with an ACTIVE guard (and the
-    // feature on) laravel/mcp answers the malformed POST with 400 and the
-    // GET/DELETE probes with 405. The inactive-guard cases below pin that the
-    // guard turns every one of those into the same bare 404.
-    $this->postJson('/redline/api/mcp', initializeMcpBody(), [
-        'MCP-Protocol-Version' => '1999-01-01',
-    ])->assertStatus(400);
-
+    // feature on) laravel/mcp answers the GET/DELETE probes with 405. The
+    // inactive-guard cases below pin that the guard turns those, and the
+    // header-mismatch POST, into the same bare 404. (The 400 laravel/mcp's
+    // header validation gives that POST is not asserted here: it differs
+    // across the laravel/mcp releases the package allows.)
     $this->get('/redline/api/mcp')->assertStatus(405);
     $this->delete('/redline/api/mcp')->assertStatus(405);
 });

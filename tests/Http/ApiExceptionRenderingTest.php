@@ -6,16 +6,15 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Zipavlin\Redline\Exceptions\FeatureDisabled;
 use Zipavlin\Redline\Exceptions\ForbiddenAction;
-use Zipavlin\Redline\Exceptions\ParentMismatch;
 use Zipavlin\Redline\Models\Comment;
 use Zipavlin\Redline\Models\Report;
 
 /**
- * The ONE rendering point for the Actions layer's domain exceptions on the
- * redline API group: ForbiddenAction -> 403 with its own message, FeatureDisabled
- * -> 403 "Feature disabled.", ParentMismatch -> the bare 404 - every body
- * byte-identical to the `abort()` envelopes the controllers used to throw
- * themselves. The per-controller try/catch is gone; these tests replace it.
+ * The Actions layer's domain exceptions are HTTP exceptions by construction:
+ * ForbiddenAction -> 403 with its own message, FeatureDisabled -> 403 "Feature
+ * disabled.", a wrong parent -> the bare 404 - every body byte-identical to the
+ * `abort()` envelopes the controllers used to throw themselves, with no
+ * per-controller try/catch and no renderer registration.
  */
 beforeEach(fn () => ensureRedlineDirectories());
 
@@ -80,7 +79,7 @@ it('renders an invalid status transition in the same 403 envelope', function () 
         ->assertJson(['message' => 'Invalid status transition.']);
 });
 
-it('renders ParentMismatch as the bare 404', function () {
+it('renders a wrong-parent row as the bare 404', function () {
     $owner = makeUser('reporter');
     $correctReport = reportFixtureBy($owner);
 
@@ -125,17 +124,6 @@ it('produces byte-identical bodies to the abort() envelopes it replaced', functi
         ->toBe($aborted(new HttpException(403, 'Forbidden.')))
         ->and($central(new FeatureDisabled))
         ->toBe($aborted(new HttpException(403, 'Feature disabled.')))
-        ->and($central(new ParentMismatch))
+        ->and($central(new NotFoundHttpException))
         ->toBe($aborted(new NotFoundHttpException));
-});
-
-it('leaves the MCP endpoint unrendered so tools keep their own error vocabulary', function () {
-    $mcpRequest = Request::create('/redline/api/mcp', 'POST');
-    $mcpRequest->headers->set('Accept', 'application/json');
-
-    $response = app(LaravelExceptionHandler::class)->render($mcpRequest, new ForbiddenAction);
-
-    // Outside the renderer's scope (api/mcp*) the domain exception falls
-    // through to the framework's default handling, not a hijacked 403.
-    expect($response->status())->not->toBe(403);
 });
