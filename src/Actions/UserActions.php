@@ -1,0 +1,322 @@
+<?php
+
+namespace Zipavlin\Redline\Actions;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Validation\Rule;
+use Zipavlin\Redline\Enums\Operation;
+use Zipavlin\Redline\Enums\QueryCapability;
+use Zipavlin\Redline\Enums\Role;
+use Zipavlin\Redline\Exceptions\ForbiddenAction;
+use Zipavlin\Redline\Mail\RegistrationApprovedMail;
+use Zipavlin\Redline\Mail\UserInvitationMail;
+use Zipavlin\Redline\Models\User;
+use Zipavlin\Redline\Providers\Storage\StorageProvider;
+use Zipavlin\Redline\RedlineServiceProvider;
+use Zipavlin\Redline\Rules\UniqueUserEmailRule;
+
+/**
+ * User management (HTTP /user surface) - grammar-driven reads plus the
+ * admin-only account lifecycle, verbatim from UserController. Only the list
+ * is open to any authenticated role (PII stays behind explicit include[] and
+ * the grammar's own per-role gates); every other operation asserts admin.
+ */
+class UserActions extends Action
+{
+    /**
+     * Grammar-driven list (filter[]/include[]/sort[]/paginate[] - see
+     * User::querySchema()). Open to any authenticated non-guest caller
+     * (the widget member picker), while PII stays behind explicit include[]
+     * and the grammar's own per-role gates. Tab counts are fetched separately
+     * via this action's aggregate() so they honour search/role filters but
+     * NOT the status filter.
+     */
+    public function list(Request $request): array
+    {
+        $this->assertAllowed($this->requestUser($request), Operation::LIST);
+
+        return User::resourceQuery($request)
+            ->use(QueryCapability::FILTER, QueryCapability::INCLUDE, QueryCapability::SORT, QueryCapability::PAGINATE)
+            ->parse()
+            ->list();
+    }
+
+    /**
+     * Tab counts (all/active/pending) honour search + role filters but NOT
+     * the status filter, so tabs don't jump as you switch them.
+     */
+    public function aggregate(Request $request): array
+    {
+        $this->assertAdmin($request);
+
+        return User::resourceQuery($request)
+            ->use(QueryCapability::FILTER, QueryCapability::AGGREGATE)
+            ->parse()
+            ->aggregate();
+    }
+
+    /**
+     * A single user shaped by include[] - stats and last_active_at are
+     * include-gated (show-only). The base row is id/status/created_at.
+     */
+    public function show(Request $request, $user): array
+    {
+        $this->assertAdmin($request);
+
+        $model = app(User::class)->findOrFail($user);
+
+        return User::resourceQuery($request)->use(QueryCapability::INCLUDE)->parse()->hydrate($model);
+    }
+
+    /**
+     * Create a user account (admin only). With a configured mailer the
+     * initial password is optional - omitting it emails a signed set-password
+     * invitation. Without mail the admin must set a password (host apps may
+     * have no mailer). Returns the mutation row plus the invitation outcome.
+     */
+    public function store(Request $request): array
+    {
+        $this->assertAdmin($request);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', new UniqueUserEmailRule],
+            'role' => ['required', Rule::in([Role::REPORTER->value, Role::DEVELOPER->value, Role::ADMIN->value])],
+            'password' => RedlineServiceProvider::mailConfigured()
+                ? ['nullable', 'string', 'min:8']
+                : ['required', 'string', 'min:8'],
+        ]);
+
+        $password = $validated['password'] ?? null;
+
+        $user = app(User::class)->create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'role' => Role::from($validated['role']),
+            'password' => $password ? Hash::make($password) : null,
+            'status' => 'approved',
+        ]);
+
+        $this->audit($request, 'user.store', $user->id);
+
+        $invitation = $password ? ['sent' => false, 'error' => null] : $this->sendInvitation($user);
+
+        return [
+            ...$this->row($user->loadCount(['reports', 'comments'])),
+            'invitation_sent' => $invitation['sent'],
+            'invitation_error' => $invitation['error'],
+        ];
+    }
+
+    /**
+     * Update a user account (admin only). Moving a user back to pending
+     * revokes their access; approving a pending registration notifies them.
+     * Returns the mutation row.
+     */
+    public function update(Request $request, $user): array
+    {
+        $this->assertAdmin($request);
+
+        $model = app(User::class)->findOrFail($user);
+        $wasPending = $model->status === 'pending';
+
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'email', 'max:255', new UniqueUserEmailRule($model->id)],
+            'role' => ['sometimes', Rule::in([Role::REPORTER->value, Role::DEVELOPER->value, Role::ADMIN->value])],
+            'status' => ['sometimes', Rule::in(['approved', 'pending'])],
+        ]);
+
+        if (isset($validated['role'])) {
+            $validated['role'] = Role::from($validated['role']);
+        }
+
+        // Never let the last admin be demoted or deactivated - otherwise the
+        // instance can be locked out of all admin-only actions.
+        $demotes = isset($validated['role']) && $validated['role'] !== Role::ADMIN;
+        $deactivates = isset($validated['status']) && $validated['status'] !== 'approved';
+        if (($demotes || $deactivates) && $this->isLastAdmin($model)) {
+            abort(422, 'Cannot demote or deactivate the last remaining admin.');
+        }
+
+        $model->update($validated);
+
+        // Moving a user back to pending revokes their access - invalidate any JWT
+        // already issued for them, or that token keeps working until it expires.
+        if (! $wasPending && ($validated['status'] ?? null) === 'pending') {
+            $model->bumpTokenVersion();
+        }
+
+        $this->audit($request, 'user.update', $model->id);
+
+        // Notify the user the moment their pending registration is approved;
+        // any other status change stays silent.
+        if ($wasPending && ($validated['status'] ?? null) === 'approved') {
+            $this->notifyApproved($model->fresh());
+        }
+
+        return $this->row($model->fresh()->loadCount(['reports', 'comments']));
+    }
+
+    /**
+     * Delete a user account (admin only). The last admin can never leave.
+     */
+    public function destroy(Request $request, $user): void
+    {
+        $this->assertAdmin($request);
+
+        $model = app(User::class)->findOrFail($user);
+
+        if ($this->isLastAdmin($model)) {
+            abort(422, 'Cannot delete the last remaining admin.');
+        }
+
+        $model->delete();
+
+        $this->audit($request, 'user.delete', $model->id);
+    }
+
+    /**
+     * Approve a pending registration (admin only); the user is notified the
+     * moment their account is approved. Returns the mutation row.
+     */
+    public function approve(Request $request, $user): array
+    {
+        $this->assertAdmin($request);
+
+        $model = app(User::class)->findOrFail($user);
+        $wasPending = $model->status === 'pending';
+        $model->update(['status' => 'approved']);
+
+        $this->audit($request, 'user.approve', $model->id);
+
+        if ($wasPending) {
+            $this->notifyApproved($model->fresh());
+        }
+
+        return $this->row($model->fresh()->loadCount(['reports', 'comments']));
+    }
+
+    /**
+     * Set a new password for the user (admin only) and invalidate their
+     * outstanding JWTs. Returns the ok envelope.
+     */
+    public function resetPassword(Request $request, $user): array
+    {
+        $this->assertAdmin($request);
+
+        $validated = $request->validate([
+            'password' => ['required', 'string', 'min:8'],
+        ]);
+
+        $model = app(User::class)->findOrFail($user);
+        $model->update(['password' => Hash::make($validated['password'])]);
+
+        // Invalidate the user's outstanding JWTs after an admin resets their password.
+        $model->bumpTokenVersion();
+
+        $this->audit($request, 'user.reset-password', $model->id);
+
+        return ['ok' => true];
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * The admin gate for every non-list operation: a missing identity is the
+     * middleware's 401 (defense-in-depth, kept verbatim from authUser()), a
+     * non-admin caller is the endpoint's own 403 vocabulary.
+     */
+    private function assertAdmin(Request $request): void
+    {
+        abort_unless($request->user() instanceof User, 401, 'Unauthenticated.');
+
+        if (! $request->user()->isAdmin) {
+            throw new ForbiddenAction('Admin access required.');
+        }
+    }
+
+    /**
+     * The canonical index-row shape for a user.
+     */
+    private function row(User $user): array
+    {
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role->value,
+            'status' => $user->status,
+            'reports_count' => (int) ($user->reports_count ?? $user->reports()->count()),
+            'comments_count' => (int) ($user->comments_count ?? $user->comments()->count()),
+        ];
+    }
+
+    /**
+     * Email a signed "set your password" link pointing at the dashboard reset
+     * page. Reuses the reset-password signed route so the SPA's existing reset
+     * flow works unchanged.
+     *
+     * Returns the send outcome so the API can tell the admin when an invitation
+     * could not be delivered. The user record is still created - a failed mail
+     * must never fail the request.
+     *
+     * @return array{sent: bool, error: 'mail_not_configured'|'send_failed'|null}
+     */
+    private function sendInvitation(User $user): array
+    {
+        if (! RedlineServiceProvider::mailConfigured()) {
+            return ['sent' => false, 'error' => 'mail_not_configured'];
+        }
+
+        $signed = URL::temporarySignedRoute(
+            'redline.auth.reset-password',
+            now()->addHour(),
+            ['email' => $user->email],
+        );
+
+        // The SPA re-POSTs the signed query to the reset endpoint, so the link
+        // can point at the dashboard reset page carrying that same query.
+        $query = parse_url($signed, PHP_URL_QUERY);
+        $base = rtrim(app(StorageProvider::class)->dashboardUrl(), '/');
+
+        $sent = RedlineServiceProvider::mail($user->email, new UserInvitationMail($user->name, $base.'/reset-password?'.$query));
+
+        return ['sent' => $sent, 'error' => $sent ? null : 'send_failed'];
+    }
+
+    /**
+     * Best-effort notification that the user's registration was approved; the
+     * mail helper never throws, so a failed send cannot fail the request.
+     */
+    private function notifyApproved(User $user): void
+    {
+        RedlineServiceProvider::mail($user->email, new RegistrationApprovedMail($user->name, app(StorageProvider::class)->dashboardUrl()));
+    }
+
+    /**
+     * True when $model is an admin and no other admin remains.
+     */
+    private function isLastAdmin(User $model): bool
+    {
+        return $model->role === Role::ADMIN
+            && app(User::class)->where('role', Role::ADMIN)->where('id', '!=', $model->id)->doesntExist();
+    }
+
+    /**
+     * Minimal audit trail for admin user-management actions.
+     */
+    private function audit(Request $request, string $action, string $targetId): void
+    {
+        logger()->info('redline.audit', [
+            'action' => $action,
+            'actor_id' => $request->user()?->id,
+            'target_id' => $targetId,
+            'ip' => $request->ip(),
+        ]);
+    }
+}

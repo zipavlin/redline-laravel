@@ -1,5 +1,7 @@
 <?php
 
+use Zipavlin\Redline\Models\User;
+
 beforeEach(function () {
     ensureRedlineDirectories();
 });
@@ -116,4 +118,28 @@ it('returns 422 when body is missing', function () {
 it('returns 401 when no token is provided', function () {
     $this->postJson('/redline/api/report', makeReportData())
         ->assertStatus(401);
+});
+
+// ---------------------------------------------------------------------------
+// Forbidden callers - the centralized Actions exception rendering (review m1)
+// ---------------------------------------------------------------------------
+
+it('answers 403 for a forbidden caller instead of an uncaught 500', function () {
+    config(['redline.auth.guest' => true]);
+
+    // The shared guest identity resolves by email inside RedlineApiAuth, so a
+    // row with that email but a pending, non-guest role passes the
+    // middleware and reaches ReportActions::create - the one caller shape the
+    // CREATE gate refuses. The renderer maps the ForbiddenAction to the same
+    // 403 envelope the old per-controller catch produced.
+    app(User::class)->create([
+        'name' => 'Pending Guest Row',
+        'email' => 'guest@redline.local',
+        'role' => 'reporter',
+        'status' => 'pending',
+    ]);
+
+    $this->postJson('/redline/api/report', makeReportData())
+        ->assertStatus(403)
+        ->assertJson(['message' => 'Forbidden.']);
 });

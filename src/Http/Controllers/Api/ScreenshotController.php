@@ -4,30 +4,23 @@ namespace Zipavlin\Redline\Http\Controllers\Api;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Zipavlin\Redline\Enums\Feature;
-use Zipavlin\Redline\Enums\Operation;
+use Zipavlin\Redline\Actions\ScreenshotActions;
 use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\Screenshot;
-use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
 class ScreenshotController extends Controller
 {
-    public function __construct(private readonly StorageProvider $storage) {}
+    public function __construct(private readonly ScreenshotActions $actions) {}
 
     /**
      * GET /redline/api/report/{report}/screenshot
      */
     public function show(Request $request, Report $report): JsonResponse
     {
-        $this->checkUser($request, Operation::VIEW);
+        $screenshot = $this->actions->get($this->authUser($request), $report);
 
-        $screenshot = app(Screenshot::class)
-            ->where('report_id', $report->id)
-            ->first();
-
-        if (! $screenshot) {
+        if ($screenshot === null) {
             return response()->json(['message' => 'Screenshot not found.'], 404);
         }
 
@@ -36,28 +29,14 @@ class ScreenshotController extends Controller
 
     /**
      * POST /redline/api/report/{report}/screenshot
-     *
-     * Upload PNG. Max 5 MB.
      */
     public function store(Request $request, Report $report): JsonResponse
     {
-        $this->checkFeature(Feature::SCREENSHOTS);
-        $this->checkUser($request, Operation::UPDATE, $report);
+        $screenshot = $this->actions->store($this->authUser($request), $report, $request);
 
-        $existing = app(Screenshot::class)->where('report_id', $report->id)->first();
-
-        if ($existing) {
+        if ($screenshot === null) {
             return response()->json(['message' => 'Screenshot already exists for this report.'], 409);
         }
-
-        $request->validate([
-            'screenshot' => ['required', 'file', 'mimes:png', 'max:5120'],
-        ]);
-
-        $id = (string) Str::orderedUuid();
-        $path = $this->storage->storeScreenshot($request->file('screenshot'), $id);
-
-        $screenshot = app(Screenshot::class)->create(['id' => $id, 'report_id' => $report->id, 'path' => $path]);
 
         return response()->json($screenshot->toArray(), 201);
     }
@@ -65,11 +44,14 @@ class ScreenshotController extends Controller
     /**
      * GET /redline/api/report/{report}/screenshot/{screenshot}/binary
      */
-    public function binary(Request $request, Report $report, Screenshot $screenshot): BinaryFileResponse
+    public function binary(Request $request, Report $report, Screenshot $screenshot): BinaryFileResponse|JsonResponse
     {
-        $this->checkUser($request, Operation::VIEW);
-        $this->checkParent($report, $screenshot);
+        $file = $this->actions->binary($this->authUser($request), $report, $screenshot);
 
-        return response()->file($this->storage->screenshotPath().DIRECTORY_SEPARATOR.$screenshot->path);
+        if ($file === null) {
+            return response()->json(['message' => 'Screenshot not found.'], 404);
+        }
+
+        return $file;
     }
 }

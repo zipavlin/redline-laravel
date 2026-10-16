@@ -103,6 +103,42 @@ it('report show exposes browser (without user_agent) to developers only, when as
     expect($owner)->not->toHaveKey('browser');
 });
 
+it('report show skips the auto acknowledge silently for a non developer caller', function () {
+    $reporter = makeUser('reporter');
+    $report = makeReport($reporter);
+
+    expect($report['status'])->toBe('new');
+
+    // A reporter's GET must be a plain read: no 500, no transition - the
+    // acknowledge is the developer caller's side effect only.
+    $this->getJson("/redline/api/report/{$report['id']}", [
+        'Authorization' => 'Bearer '.makeAuthToken($reporter),
+    ])->assertStatus(200);
+
+    expect(app(Report::class)->find($report['id'])->status)->toBe('new');
+});
+
+it('pins the mark-noticed removal: show() acknowledges via updateStatus for developers, silently for others', function () {
+    $reporter = makeUser('reporter');
+    $devReport = makeReport($reporter, ['status' => 'new']);
+    $ownReport = makeReport($reporter, ['status' => 'new']);
+
+    // The mark-noticed action is gone; the show guard now calls the shared
+    // ReportActions::updateStatus with Status::NOTICED - the transition and
+    // the developer-only gate must be unchanged.
+    $this->getJson("/redline/api/report/{$devReport['id']}", authHeaders('developer'))
+        ->assertStatus(200)
+        ->assertJsonPath('status', 'noticed');
+
+    $this->getJson("/redline/api/report/{$ownReport['id']}", [
+        'Authorization' => 'Bearer '.makeAuthToken($reporter),
+    ])->assertStatus(200)
+        ->assertJsonPath('status', 'new');
+
+    expect(app(Report::class)->find($devReport['id'])->status)->toBe('noticed')
+        ->and(app(Report::class)->find($ownReport['id'])->status)->toBe('new');
+});
+
 it('report show returns full screenshot, video and comments objects via bare include[]', function () {
     $reporter = makeUser('reporter');
     $report = makeReport($reporter);
@@ -226,4 +262,41 @@ it('report aggregate groups by location (broken down by status) and lists distin
 
     expect($mine['location']['count'])->toHaveCount(1)
         ->and($mine['location']['count'])->toHaveKey('/a');
+});
+
+it('screenshot binary answers with the shared path guard and still serves a real file', function () {
+    // The traversal rule now has one home (Support\MediaFile::plainName), so
+    // the binary endpoint refuses an unsafe stored name the same way
+    // screenshot_get does, and keeps serving healthy rows unchanged.
+    $developer = makeUser('developer');
+
+    $unsafeReport = makeReport($developer);
+    $unsafe = app(Screenshot::class)->create(['report_id' => $unsafeReport['id'], 'path' => '../escape.png']);
+
+    $this->get("/redline/api/report/{$unsafeReport['id']}/screenshot/{$unsafe->id}/binary", authHeaders('developer'))
+        ->assertStatus(404)
+        ->assertJsonPath('message', 'Screenshot not found.');
+
+    $safeReport = makeReport($developer);
+    $safe = app(Screenshot::class)->create(['report_id' => $safeReport['id'], 'path' => newScreenshotFilePath()]);
+
+    $this->get("/redline/api/report/{$safeReport['id']}/screenshot/{$safe->id}/binary", authHeaders('developer'))
+        ->assertOk()
+        // The mime guess is environment-dependent (fileinfo vs content sniffing),
+        // so what is pinned here is the 200 file response, not the exact type.
+        ->assertHeader('content-type');
+});
+
+it('a report show that 422s on include[] never acknowledges the report', function () {
+    // The acknowledge write must come after the read is validated: before the
+    // fix a 422ing include[] still left the report moved to noticed.
+    $developer = makeUser('developer');
+    $report = makeReport($developer);
+
+    expect(app(Report::class)->find($report['id'])->status)->toBe('new');
+
+    $this->getJson("/redline/api/report/{$report['id']}?include[]=nonsense", authHeaders('developer'))
+        ->assertStatus(422);
+
+    expect(app(Report::class)->find($report['id'])->status)->toBe('new');
 });

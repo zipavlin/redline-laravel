@@ -4,28 +4,23 @@ namespace Zipavlin\Redline\Http\Controllers\Api;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Zipavlin\Redline\Enums\Feature;
-use Zipavlin\Redline\Enums\Operation;
+use Zipavlin\Redline\Actions\VideoActions;
 use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\Video;
-use Zipavlin\Redline\Providers\Storage\StorageProvider;
 
 class VideoController extends Controller
 {
-    public function __construct(private readonly StorageProvider $storage) {}
+    public function __construct(private readonly VideoActions $actions) {}
 
     /**
      * GET /redline/api/report/{report}/video
      */
     public function show(Request $request, Report $report): JsonResponse
     {
-        $this->checkUser($request, Operation::VIEW);
+        $video = $this->actions->get($this->authUser($request), $report);
 
-        $video = app(Video::class)->where('report_id', $report->id)->first();
-
-        if (! $video) {
+        if ($video === null) {
             return response()->json(['message' => 'Video not found.'], 404);
         }
 
@@ -34,26 +29,14 @@ class VideoController extends Controller
 
     /**
      * POST /redline/api/report/{report}/video
-     *
-     * Upload WebM. Max 50 MB.
      */
     public function store(Request $request, Report $report): JsonResponse
     {
-        $this->checkFeature(Feature::VIDEOS);
-        $this->checkUser($request, Operation::UPDATE, $report);
+        $video = $this->actions->store($this->authUser($request), $report, $request);
 
-        $existing = app(Video::class)->where('report_id', $report->id)->first();
-
-        if ($existing) {
+        if ($video === null) {
             return response()->json(['message' => 'Video already exists for this report.'], 409);
         }
-
-        $request->validate([
-            'video' => ['required', 'file', 'max:51200'],
-        ]);
-
-        $path = $this->storage->storeVideo($request->file('video'), Str::uuid());
-        $video = app(Video::class)->create(['report_id' => $report->id, 'path' => $path]);
 
         return response()->json($video->fresh()->toArray(), 201);
     }
@@ -61,11 +44,14 @@ class VideoController extends Controller
     /**
      * GET /redline/api/report/{report}/video/{video}/binary
      */
-    public function binary(Request $request, Report $report, Video $video): BinaryFileResponse
+    public function binary(Request $request, Report $report, Video $video): BinaryFileResponse|JsonResponse
     {
-        $this->checkUser($request, Operation::VIEW);
-        $this->checkParent($report, $video);
+        $file = $this->actions->binary($this->authUser($request), $report, $video);
 
-        return response()->file($this->storage->videoPath().DIRECTORY_SEPARATOR.$video->path);
+        if ($file === null) {
+            return response()->json(['message' => 'Video not found.'], 404);
+        }
+
+        return $file;
     }
 }
