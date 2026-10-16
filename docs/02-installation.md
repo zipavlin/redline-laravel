@@ -7,7 +7,7 @@ Redline is a Composer package that installs into an existing Laravel application
 | Requirement | Version / note |
 |---|---|
 | PHP | `^8.3` or `^8.4` |
-| Laravel | 11.x, 12.x or 13.x (`illuminate/contracts` + `illuminate/database` `^11.0\|\|^12.0\|\|^13.0`) |
+| Laravel | 12.41.1+ or 13.x (`illuminate/contracts` + `illuminate/database` `^12.41.1\|\|^13.0`) |
 | SQLite driver | `pdo_sqlite` - required by the storage backend |
 
 ## Composer install

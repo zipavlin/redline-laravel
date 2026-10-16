@@ -57,7 +57,7 @@ mount time, not from element attributes.
 | Component | Requirement |
 |---|---|
 | PHP | 8.3 or 8.4 (`^8.3\|^8.4`) |
-| Laravel | 11.x, 12.x, or 13.x |
+| Laravel | 12.41.1+ or 13.x |
 | Extension | `pdo_sqlite` (required by the storage backend) |
 
 ## Activation model

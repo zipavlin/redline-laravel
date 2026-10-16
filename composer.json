@@ -22,8 +22,8 @@
         "composer-runtime-api": "^2.0",
         "ezyang/htmlpurifier": "^4.19",
         "firebase/php-jwt": "^7.1",
-        "illuminate/contracts": "^11.47.0||^12.41.1||^13.0",
-        "illuminate/database": "^11.47.0||^12.41.1||^13.0",
+        "illuminate/contracts": "^12.41.1||^13.0",
+        "illuminate/database": "^12.41.1||^13.0",
         "laravel/mcp": "^1.0",
         "symfony/process": "^7.4.5||^8.0.5"
     },
@@ -31,7 +31,7 @@
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.14",
         "nunomaduro/collision": "^8.8",
-        "orchestra/testbench": "^9.0||^10.0||^11.0",
+        "orchestra/testbench": "^10.0||^11.0",
         "pestphp/pest": "^4.0",
         "pestphp/pest-plugin-arch": "^4.0",
         "pestphp/pest-plugin-laravel": "^4.0"

@@ -32,6 +32,9 @@
 
 ## Changed
 
+- **Laravel 11 is no longer supported** - Redline now requires Laravel 12.41.1
+  or newer (or 13). The MCP server's dependencies need it. Hosts on Laravel 11
+  must upgrade Laravel before updating Redline.
 - **Features are now opt-in** - nothing is on until you list it in
   `REDLINE_FEATURES` (for example `REDLINE_FEATURES=screenshots,comments,mcp`),
   replacing `REDLINE_DISABLED`. The installer asks which features you want and
