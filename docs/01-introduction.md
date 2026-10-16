@@ -46,11 +46,11 @@ For developers and admins, a built-in **dashboard** covering reports, users, and
 analytics, where reports flow through the lifecycle `new → noticed → progress →
 resolved → done`.
 
-Features are individually switchable. Four flags - `screenshots`, `videos`, `files`,
-and `comments` - are all **on by default** and can be turned off with the
-`REDLINE_DISABLED` environment variable (comma-separated list). The frontend learns
-which features are enabled from the public bootstrap endpoint at mount time, not from
-element attributes.
+Features are individually switchable. Five flags - `screenshots`, `videos`, `files`,
+`comments`, and `mcp` - are all **off** until listed in the `REDLINE_FEATURES` environment
+variable (comma-separated, additive). Enable/toggle with `php artisan redline:enable`.
+The frontend learns which features are enabled from the public bootstrap endpoint at
+mount time, not from element attributes.
 
 ## Requirements
 
@@ -65,8 +65,9 @@ element attributes.
 Only parts of the package are gated by environment:
 
 - **Always available** - `vendor:publish` tags (`redline-assets`, `redline-config`,
-  `redline-mail-views`) and the four artisan commands (`redline:install`,
-  `redline:update`, `redline:user`, `redline:remove`).
+  `redline-mail-views`) and the six artisan commands (`redline:install`,
+  `redline:update`, `redline:enable`, `redline:user`, `redline:mcp`,
+  `redline:remove`).
 - **Dashboard** - the SPA shell at `/{redline.path}` (default `/redline`) loads when
   the guard is active **and** the request path starts with the redline path.
 - **API routes + widget injection** - require the guard to be active **and** the

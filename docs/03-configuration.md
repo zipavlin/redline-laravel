@@ -34,7 +34,7 @@ Every key in `config/redline.php` and the env var that backs it:
 | `REDLINE_AUTH_GUEST_ORIGINS` | *(none)* | Comma-separated widget origins allowed to submit guest reports. When set, an anonymous `POST /redline/api/report` must present a matching `Origin` (or `Referer`) header or the request's own scheme+host. |
 | `REDLINE_AUTH_GUEST_THROTTLE` | `20` | Per-minute per-IP rate limit for guest report submissions (backs the `redline-guest` limiter). |
 | `REDLINE_ALLOWED_ORIGINS` | *(none)* | Escape hatch for cookie-mutation `Origin` checks behind reverse proxies: comma-separated extra origins accepted when the request's scheme+host differs from the browser-visible origin. |
-| `REDLINE_DISABLED` | *(none)* | Comma-separated features to disable. All features are on by default. Accepted values are exactly `screenshots, videos, files, comments` - see [Feature flags](#feature-flags). |
+| `REDLINE_FEATURES` | *(none)* | Comma-separated features to enable. Every feature is **off** until it is listed. Accepted values are exactly `screenshots, videos, files, comments, mcp` - see [Feature flags](#feature-flags). |
 
 Two auth-cookie keys have no env backing and can only be changed by editing the published config: `auth.cookie.name` (default `redline_token`) and the CSRF pair `auth.csrf_cookie` / `auth.csrf_header` (defaults `redline_csrf` / `X-Redline-CSRF`).
 
@@ -77,7 +77,7 @@ Cookie attributes, all env-backed (see the main table): `Secure` (`REDLINE_COOKI
 
 ## Rate limiting
 
-Three named limiters, all per-minute per-IP:
+Three named limiters serve the HTTP surface, all per-minute per-IP:
 
 | Limiter | Applied to | Knob | Default |
 |---|---|---|---|
@@ -87,24 +87,34 @@ Three named limiters, all per-minute per-IP:
 
 The guest limiter is enforced inside `RedlineApiAuth` itself; the other two are registered on the route groups.
 
+Two more serve the MCP endpoint, in pinned order, per "MCP server" in the README:
+
+| Limiter | Applied to | Knob | Default |
+|---|---|---|---|
+| `redline-mcp-ip` | Pre-auth (flood/log-noise control, not brute-force defence) | `REDLINE_MCP_IP_THROTTLE` (env-only) | 240/min/IP |
+| `redline-mcp` | After auth, keyed `user id` with IP fallback | `REDLINE_MCP_THROTTLE` (env-only) | 120/min |
+
 ## Feature flags
 
-`REDLINE_DISABLED` is a comma-separated list of features to turn **off**. All features are on by default.
+`REDLINE_FEATURES` is a comma-separated, additive list: a feature is **off** unless its value appears. A fresh install therefore enables nothing until `redline:install`, `redline:enable` or a hand edit of `.env` lists some.
 
-Accepted values - exactly these four:
+Accepted values - exactly these five:
 
 - `screenshots`
 - `videos`
 - `files`
 - `comments`
+- `mcp` (an MCP server at `/{REDLINE_PATH}/api/mcp` - see "MCP server" in the README)
 
-> The `mentions` value listed in a stale comment inside `config/redline.php` does **not** exist - the `Feature` enum defines only the four values above, and unknown strings are silently dropped when the config is parsed.
+An unknown value is a config error (`Unknown Redline feature(s): …`) thrown at boot and wherever the list is read - it is never silently dropped.
 
 Example:
 
 ```env
-REDLINE_DISABLED=videos,files
+REDLINE_FEATURES=screenshots,comments
 ```
+
+Toggle with `php artisan redline:enable` (list current state) and enable/disable by name.
 
 ## Changing the URL prefix
 

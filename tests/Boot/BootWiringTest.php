@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Zipavlin\Redline\RedlineServiceProvider;
 
 /**
  * Boot-level wiring (M-2): TestCase::bootRedlineForTests() reproduces the service
@@ -29,4 +30,19 @@ it('loads the real routes through the service provider when not running in conso
         // Restore a normal console application for teardown and later tests.
         $this->refreshApplication();
     }
+});
+
+// ---------------------------------------------------------------------------
+// Feature config validation
+// ---------------------------------------------------------------------------
+
+it('fails fast at register when redline.features contains an unknown value', function () {
+    config(['redline.features' => ['screenshots', 'tupo']]);
+
+    $provider = new RedlineServiceProvider($this->app);
+
+    expect(fn () => $provider->register())->toThrow(
+        InvalidArgumentException::class,
+        'Unknown Redline feature(s): tupo. Valid features: screenshots, videos, files, comments, mcp.',
+    );
 });

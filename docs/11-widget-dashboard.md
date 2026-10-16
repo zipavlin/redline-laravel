@@ -85,7 +85,7 @@ php artisan vendor:publish --tag=redline-assets
 The payload (`src/Http/Controllers/Api/BootstrapController.php`):
 
 - `version` - manifest version (`2`).
-- `features` - enabled features (screenshots/videos/files/comments).
+- `features` - enabled features (screenshots/videos/files/comments/mcp).
 - `capabilities` - `guest_reporting`, `auth` (`can_login`, `can_register`, `fields`, `can_select_role`, `requires_approval`, `requires_email_verification`), `mail.configured`.
 - `csrf` - the `cookie` and `header` names for double-submit CSRF.
 

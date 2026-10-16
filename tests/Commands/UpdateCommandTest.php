@@ -266,3 +266,27 @@ it('reports the missing composer hook in dry-run mode', function () {
         ->expectsOutputToContain('The composer post-package-update hook is missing')
         ->assertExitCode(0);
 });
+
+// ---------------------------------------------------------------------------
+// Feature state awareness
+// ---------------------------------------------------------------------------
+
+it('prints the enabled feature state in dry-run and the post-update summary', function () {
+    config(['redline.features' => ['files', 'comments']]);
+
+    $this->artisan('redline:update --dry-run')
+        ->expectsOutputToContain('   - Features: files, comments enabled; every other feature is off.')
+        ->assertExitCode(0);
+
+    $this->artisan('redline:update --force')
+        ->expectsOutputToContain('  Features: files, comments enabled; every other feature is off.')
+        ->assertExitCode(0);
+});
+
+it('prints an explicit none-enabled feature state in dry-run', function () {
+    config(['redline.features' => []]);
+
+    $this->artisan('redline:update --dry-run')
+        ->expectsOutputToContain('   - Features: none enabled - set REDLINE_FEATURES or run `php artisan redline:enable`.')
+        ->assertExitCode(0);
+});

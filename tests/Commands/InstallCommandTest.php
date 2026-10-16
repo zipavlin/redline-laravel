@@ -91,12 +91,69 @@ it('accepts an empty features answer ("disable none") and completes the install'
     $this->artisan('redline:install')
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
         ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
         ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
         ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
         ->expectsConfirmation('Would you like to create the first admin user?', 'no')
         ->expectsOutputToContain('Redline installed successfully!')
+        ->assertExitCode(0);
+});
+
+it('writes REDLINE_FEATURES when features are selected during install', function () {
+    $command = fakeInstallCommand();
+
+    $this->artisan('redline:install')
+        ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
+        ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', 'screenshots,comments')
+        ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
+        ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
+        ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
+        ->expectsConfirmation('Would you like to create the first admin user?', 'no')
+        ->expectsOutputToContain('REDLINE_FEATURES=screenshots,comments')
+        ->assertExitCode(0);
+
+    expect($command->envWrites['REDLINE_FEATURES'])->toBe('screenshots,comments');
+});
+
+/**
+ * Selecting the mcp feature surfaces the two setup hints the flag alone
+ * cannot give: where to mint a token, and which endpoint to point the MCP
+ * client at (derived from config, not a hardcoded host).
+ */
+it('mcp selection prints the token + endpoint hints during install', function () {
+    // config-only: putenv() here would leak APP_URL process-wide and flake
+    // later browser-URL assertions in randomized order (SecurityTest S1).
+    fakeInstallCommand();
+    config(['app.url' => 'https://staging.example.com']);
+
+    $this->artisan('redline:install')
+        ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
+        ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', 'mcp')
+        ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
+        ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
+        ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
+        ->expectsConfirmation('Would you like to create the first admin user?', 'no')
+        ->expectsOutputToContain('redline:mcp')
+        ->expectsOutputToContain('staging.example.com/redline/api/mcp')
+        ->assertExitCode(0);
+});
+
+it('an install without mcp stays quiet about tokens and endpoints', function () {
+    fakeInstallCommand();
+
+    $this->artisan('redline:install')
+        ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
+        ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', 'screenshots')
+        ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
+        ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
+        ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
+        ->expectsConfirmation('Would you like to create the first admin user?', 'no')
+        ->doesntExpectOutputToContain('redline:mcp')
+        ->doesntExpectOutputToContain('redline/api/mcp')
         ->assertExitCode(0);
 });
 
@@ -106,7 +163,7 @@ it('skips creating a user when LaravelAuthProvider is selected during install', 
     $this->artisan('redline:install')
         ->expectsQuestion('Which auth provider would you like to use?', LaravelAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
         ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
         ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
         ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
@@ -123,7 +180,7 @@ it('writes the SMTP mailer values when the no-DNS SMTP option is chosen', functi
     $this->artisan('redline:install')
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
         ->expectsQuestion('How would you like to set up email?', 'SMTP without DNS (recommended for staging - e.g. Mailjet)')
         ->expectsQuestion('SMTP host', 'in-v3.mailjet.com')
         ->expectsQuestion('SMTP port', '587')
@@ -147,6 +204,7 @@ it('writes the SMTP mailer values when the no-DNS SMTP option is chosen', functi
         'MAIL_FROM_ADDRESS' => 'staging@example.com',
         'MAIL_FROM_NAME' => 'Redline',
         'REDLINE_GUARD_PROVIDER' => EnvironmentGuardProvider::class,
+        'REDLINE_FEATURES' => '',
     ]);
 });
 
@@ -156,7 +214,7 @@ it('installs resend/resend-php and writes the API key when Resend is chosen', fu
     $this->artisan('redline:install')
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
         ->expectsQuestion('How would you like to set up email?', 'Resend (API) - requires verifying a sending domain (DNS)')
         ->expectsQuestion('Resend API key (re_… - create one at https://resend.com/api-keys)', 're_abc123')
         ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
@@ -177,7 +235,7 @@ it('warns that a sending domain must be DNS-verified before the user commits to 
     $this->artisan('redline:install')
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
         ->expectsQuestion('How would you like to set up email?', 'Resend (API) - requires verifying a sending domain (DNS)')
         ->expectsQuestion('Resend API key (re_… - create one at https://resend.com/api-keys)', 're_abc123')
         ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
@@ -194,7 +252,7 @@ it('prints the composer warning and continues when the package install fails', f
     $this->artisan('redline:install')
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
         ->expectsQuestion('How would you like to set up email?', 'Resend (API) - requires verifying a sending domain (DNS)')
         ->expectsQuestion('Resend API key (re_… - create one at https://resend.com/api-keys)', 're_abc123')
         ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
@@ -213,7 +271,7 @@ it('adds the composer post-package-update hook to composer.json', function () {
     $this->artisan('redline:install')
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
         ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
         ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
         ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
@@ -236,7 +294,7 @@ it('reports the composer post-package-update hook as already present', function 
     $this->artisan('redline:install')
         ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
         ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
-        ->expectsQuestion('Which features should be disabled? (separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
         ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
         ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
         ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')

@@ -109,8 +109,8 @@ package's binary controller routes - never through public/static URLs.
 - **One attachment per kind per report**: a second screenshot or video upload
   against the same report returns `409 Conflict`
   ("Screenshot already exists for this report." / "Video already exists for this report.").
-- Both `store` endpoints are feature-gated - disable with
-  `REDLINE_DISABLED=screenshots,videos` (see [Configuration](03-configuration.md)).
+- Both `store` endpoints are feature-gated - enable with
+  `REDLINE_FEATURES=screenshots,videos` (see [Configuration](03-configuration.md)).
 
 ### Private serving
 

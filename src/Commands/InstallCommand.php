@@ -20,6 +20,8 @@ use Zipavlin\Redline\Support\ComposerScripts;
 
 class InstallCommand extends Command
 {
+    use Concerns\WritesEnv;
+
     public $signature = 'redline:install';
 
     public $description = 'Interactive setup for Redline';
@@ -168,32 +170,33 @@ class InstallCommand extends Command
     }
 
     /**
-     * Handles the selection of features to disable.
+     * Handles the opt-in selection of features to enable.
      *
-     * Presents the user with a list of all available features and allows them to select
-     * which features should be disabled. An empty selection means that no features are disabled.
-     * Ensures that only valid features can be selected for disabling.
+     * Presents the user with the available features; every feature is OFF
+     * unless it is selected. An empty selection (or pressing Enter) enables
+     * none. REDLINE_FEATURES is always written so a re-run is explicit even
+     * for an empty bundle.
      *
-     * @return array<string> A list of feature values that the user has selected to disable.
+     * @return array<string> A list of feature values that the user has selected to enable.
      */
     public function handleFeatures(): array
     {
         // Intro
         $this->line('  <options=bold>Features</>');
-        $this->line('  All features are enabled by default. Select any you want to disable.');
+        $this->line('  Nothing is enabled by default. Select any you want to turn on.');
 
         // Collect features
-        $all_features = array_column(Feature::cases(), 'value');
+        $all_features = Feature::validNames();
 
-        // Prompt user to select features to disable
+        // Prompt user to select features to enable
         $question = new ChoiceQuestion(
-            'Which features should be disabled? (separate multiple with commas, or press Enter for none)',
+            'Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)',
             $all_features,
         );
         $question->setMultiselect(true);
 
         // Symfony's default ChoiceQuestion validator rejects an empty answer (it
-        // regexes the raw string), so replace it: an empty answer means "disable
+        // regexes the raw string), so replace it: an empty answer means "enable
         // none", and the parsed list is returned (Symfony 7.3+ uses the validator's
         // return value as the answer; older versions treat non-string returns as
         // valid, so this works across both).
@@ -215,19 +218,41 @@ class InstallCommand extends Command
             return $values;
         });
 
-        $to_disable = $this->output->askQuestion($question);
-        $to_disable = array_filter((array) $to_disable);
+        $to_enable = $this->output->askQuestion($question);
+        $to_enable = array_filter((array) $to_enable);
 
-        // Write env
-        if (! empty($to_disable)) {
-            $features = implode(',', $to_disable);
-            $this->writeEnvValue('REDLINE_DISABLED', $features);
-            $this->line("  <fg=green>✓</> REDLINE_DISABLED=$features");
+        // Write env - always, even when empty, so the key's presence is explicit.
+        $features = implode(',', $to_enable);
+        $this->writeEnvValue('REDLINE_FEATURES', $features);
+        $this->line($features === ''
+            ? '  <fg=green>✓</> REDLINE_FEATURES= (no features enabled)'
+            : "  <fg=green>✓</> REDLINE_FEATURES=$features");
+
+        if (in_array(Feature::MCP->value, $to_enable, true)) {
+            $this->printMcpHints();
         }
 
         $this->line('');
 
-        return $to_disable;
+        return $to_enable;
+    }
+
+    /**
+     * Points the host at the two steps the MCP surface needs beyond the
+     * feature flag: a bearer `rlm_` token and the agent endpoint, derived
+     * from the configured APP_URL and path (never a hardcoded host). APP_URL
+     * wins over url(): the console request root is always localhost, no
+     * matter what APP_URL says.
+     */
+    private function printMcpHints(): void
+    {
+        $root = rtrim((string) config('app.url'), '/') ?: rtrim(url('/'), '/');
+        $endpoint = $root.'/'.config('redline.path', 'redline').'/api/mcp';
+
+        $this->line('  <fg=yellow>•</> MCP server on - run <options=bold>php artisan redline:mcp</>:');
+        $this->line('  it issues a token and prints your agent\'s setup command.');
+        $this->line('  Your MCP client endpoint:');
+        $this->line('    <options=bold>'.$endpoint.'</>');
     }
 
     /**
@@ -343,40 +368,6 @@ class InstallCommand extends Command
         $this->line("  If a send ever hangs the request (browser shows 'network error', laravel.log stays empty), give the smtp");
         $this->line("  mailer a timeout: set 'timeout' => 10 in config/mail.php (Laravel does not read a MAIL_TIMEOUT env var).");
         $this->line('');
-    }
-
-    /**
-     * Writes or updates a key-value pair in the .env file. If the key already exists, its value is updated.
-     * If the key does not exist, it appends the new key-value pair at the end of the file.
-     *
-     * @param  string  $key  The environment variable key to write or update.
-     * @param  string  $value  The value to set for the specified key. Special characters are properly escaped.
-     */
-    protected function writeEnvValue(string $key, string $value): void
-    {
-        $envPath = base_path('.env');
-
-        if (! file_exists($envPath)) {
-            $this->warn("  No .env file found at: $envPath - skipping.");
-
-            return;
-        }
-
-        $formatted = preg_match('/[\s#]/', $value)
-            ? '"'.str_replace('"', '\\"', $value).'"'
-            : $value;
-
-        $content = file_get_contents($envPath);
-        $escaped = preg_quote($key, '/');
-        $newLine = "$key=$formatted";
-
-        if (preg_match("/^$escaped=/m", $content)) {
-            $content = preg_replace("/^$escaped=.*/m", $newLine, $content);
-        } else {
-            $content = rtrim($content)."\n$newLine\n";
-        }
-
-        file_put_contents($envPath, $content);
     }
 
     /**

@@ -39,6 +39,10 @@ return [
         //   IpGuardProvider          - active when the client IP is in REDLINE_GUARD_ALLOWED_IPS
         //   LaravelGuardProvider     - active when the host application user is logged in
         'provider' => env('REDLINE_GUARD_PROVIDER', EnvironmentGuardProvider::class),
+        // Paths whose widget injection is skipped (comma-separated; exact,
+        // subpath, `/*` or glob forms). Scoped to the WIDGET: an excluded path
+        // still serves the dashboard and the API - RedlineActive's predicate
+        // (shouldServeRoutes) deliberately does not consult this list.
         'exclude' => env('REDLINE_GUARD_EXCLUDE', null),
     ],
 
@@ -124,15 +128,30 @@ return [
     ],
 
     // -------------------------------------------------------------------------
+    // MCP
+    // -------------------------------------------------------------------------
+    // Extras for the MCP server mounted at {path}/api/mcp when the `mcp`
+    // feature is enabled. This list is merged UNDER RedlineServer::DEFAULT_TOOLS
+    // (defaults first, duplicates collapse) - a published config can ADD tools
+    // but never blank or replace the code defaults: null, non-array or partial
+    // values degrade to "defaults only". Every entry must be an existing
+    // Laravel\Mcp\Server\Tool subclass - anything else is a config error.
+    'mcp' => [
+        'tools' => [],
+    ],
+
+    // -------------------------------------------------------------------------
     // Features
     // -------------------------------------------------------------------------
-    // Comma-separated list of features to disable. All features are on by default.
-    // Example: REDLINE_DISABLED=videos,files
-    // Available: screenshots, videos, files, comments, mentions
-    'disabled' => array_values(array_filter(
+    // Additive opt-in: every feature is OFF until it is listed. Comma-separated,
+    // lower-case. Valid values: screenshots, videos, files, comments, mcp. An unknown
+    // value is a config error (thrown at boot and whenever the list is read) -
+    // it is never silently dropped.
+    // Example: REDLINE_FEATURES=screenshots,comments
+    'features' => array_values(array_filter(
         array_map(
-            fn ($f) => Feature::tryFrom(trim($f)),
-            explode(',', env('REDLINE_DISABLED', ''))
+            fn ($f) => mb_strtolower(trim((string) $f)),
+            explode(',', (string) env('REDLINE_FEATURES', ''))
         )
     )),
 ];

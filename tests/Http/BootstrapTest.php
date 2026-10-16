@@ -1,6 +1,5 @@
 <?php
 
-use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Providers\Auth\ApprovalAuthProvider;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Auth\DomainAuthProvider;
@@ -27,18 +26,27 @@ it('is public - returns 200 with no auth and no cookies', function () {
 // Features
 // ---------------------------------------------------------------------------
 
-it('exposes all four features by default', function () {
+it('advertises every enabled feature in enum order', function () {
+    // The test harness wires all Feature cases on before boot.
     $this->getJson('/redline/api/bootstrap')
         ->assertStatus(200)
-        ->assertJsonPath('features', ['screenshots', 'videos', 'files', 'comments']);
+        ->assertJsonPath('features', ['screenshots', 'videos', 'files', 'comments', 'mcp']);
 });
 
-it('respects redline.disabled', function () {
-    config(['redline.disabled' => [Feature::VIDEOS, Feature::FILES]]);
+it('advertises only the enabled features', function () {
+    config(['redline.features' => ['comments', 'screenshots']]);
 
     $this->getJson('/redline/api/bootstrap')
         ->assertStatus(200)
         ->assertJsonPath('features', ['screenshots', 'comments']);
+});
+
+it('advertises no features when none are enabled', function () {
+    config(['redline.features' => []]);
+
+    $this->getJson('/redline/api/bootstrap')
+        ->assertStatus(200)
+        ->assertJsonPath('features', []);
 });
 
 // ---------------------------------------------------------------------------

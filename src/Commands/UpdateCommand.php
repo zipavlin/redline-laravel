@@ -166,6 +166,19 @@ class UpdateCommand extends Command
     }
 
     /**
+     * Current feature state for host awareness: nothing is enabled unless
+     * REDLINE_FEATURES lists it, so an empty bundle must not read as a bug.
+     */
+    private function featuresState(): string
+    {
+        $enabled = RedlineServiceProvider::getFeatures();
+
+        return $enabled === []
+            ? 'none enabled - set REDLINE_FEATURES or run `php artisan redline:enable`'
+            : implode(', ', $enabled).' enabled; every other feature is off';
+    }
+
+    /**
      * @param  array<int, string>|null  $pending
      */
     private function reportPending(?array $pending): void
@@ -200,6 +213,7 @@ class UpdateCommand extends Command
             ? '   - Run migrations (pending state unknown).'
             : '   - Run '.count($pending).' pending migration(s) against the redline database.');
         $this->line('   - Re-publish assets to '.public_path('vendor/redline').'.');
+        $this->line('   - Features: '.$this->featuresState().'.');
 
         if (file_exists(config_path('redline.php'))) {
             $this->line('   - config/redline.php is published (would offer to re-publish).');
@@ -232,6 +246,7 @@ class UpdateCommand extends Command
             default => '  Migrations: ran '.count($pending).' pending migration(s).',
         });
         $this->line('  Assets: re-published to '.public_path('vendor/redline').'.');
+        $this->line('  Features: '.$this->featuresState().'.');
 
         if ($untouched !== []) {
             $this->line('  Left untouched: '.implode(' and ', $untouched).'.');
