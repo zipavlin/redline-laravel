@@ -70,8 +70,11 @@ Only parts of the package are gated by environment:
   `redline:remove`).
 - **Dashboard** - the SPA shell at `/{redline.path}` (default `/redline`) loads when
   the guard is active **and** the request path starts with the redline path.
-- **API routes + widget injection** - require the guard to be active **and** the
-  request path not excluded via `REDLINE_GUARD_EXCLUDE` (default: no exclusions).
+- **API routes** - require the guard to be active (`shouldServeRoutes()`);
+  `REDLINE_GUARD_EXCLUDE` never gates them.
+- **Widget injection** - additionally requires the request path not excluded via
+  `REDLINE_GUARD_EXCLUDE` (default: no exclusions); exclusion stops only the
+  widget, never the API and never the dashboard. See [Guards](06-guards.md).
 
 The default guard is
 `Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider`, which is active when

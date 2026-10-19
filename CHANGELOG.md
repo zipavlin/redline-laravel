@@ -4,7 +4,8 @@
 
 - **MCP server for AI coding agents** - let Claude Code, OpenCode, Codex, PI,
   Cursor, VS Code or Gemini CLI read and triage your reports. Turn it on with
-  `php artisan redline:enable mcp`, run `php artisan redline:migrate`, and the
+  `php artisan redline:enable mcp`, run `php artisan redline:update` (it applies
+  the pending `redline_tokens` migration), and the
   endpoint is served at `{redline.path}/api/mcp`. Agents get eight tools:
   `report_list`, `report_get`, `screenshot_get`, `comment_list` and `user_list`
   to read, and `report_create`, `comment_create` and `report_update_status` to
@@ -51,7 +52,10 @@
   the guard is now checked on every request, for the API, the dashboard shell
   and the MCP route. Running `route:cache` or `optimize` in one environment can
   no longer expose Redline on a host where the guard says it should be off.
-  With the guard inactive Redline leaves no trace.
+  With the guard inactive Redline leaves no trace. Exception:
+  `LaravelGuardProvider` cannot answer before the session stack runs, so its
+  API/MCP surface stays token-gated per request instead of 404 - see
+  `docs/06-guards.md`.
 - **Redline routes survive `route:cache`** - they were previously missing from a
   cached route list.
 - **Forbidden report submissions return `403`** - `POST /report` from a user who
