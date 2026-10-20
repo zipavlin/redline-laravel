@@ -64,7 +64,7 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 ### PHP (Pest)
 ```
-composer test                    # full Pest suite (baseline: 699 passed, 0 skipped; see Test status)
+composer test                    # full Pest suite (baseline: 698 passed, 0 skipped; see Test status)
 composer test-coverage           # Pest + coverage
 composer format                  # pint (Laravel defaults; no pint.json)
 vendor/bin/pest --filter=Report  # single file / group
@@ -80,7 +80,9 @@ vendor/bin/pint --dirty && composer test
 
 ## Test status (current baseline)
 
-`vendor/bin/pest` reports **699 passed, 0 skipped (2653 assertions)**. The package has a
+`vendor/bin/pest` reports **698 passed, 0 skipped (2651 assertions)** (one test fewer
+than the documented 699 baseline since the Pest 4.4.1 raise in `ea25a2a` dropped two
+laravel/mcp header assertions and added one back). The package has a
 single storage backend, so there are no environment-dependent skips.
 
 ## Architecture
@@ -129,8 +131,12 @@ Endpoints (inside the protected `RedlineApiAuth` + `RedlineCsrf` group):
 | DELETE | `/report/{report}/member` | body `{"user_ids": [...]}`; `Operation::UPDATE`-gated (developer/admin/author) **or** an eligible (approved, non-guest) caller removing exactly themselves; idempotent (`detach`); removes only existing pairs |
 
 Both respond `{ "members": [ { id, name, initials } ] }` - the report's full current
-list, sorted by `name` then `id` (the shared `Support\Members::fromUsers()` projection,
-also used by the read grammar so the two cannot drift).
+list, sorted by `name` then `id` (the shared `Support\Members::forReport()` projection -
+fetches the eager-loaded relation when present, the live query otherwise, and excludes
+the author; also used by the read grammar, the status response and `fromUsers()`
+underneath, so the surfaces cannot drift). The write-side helpers live in
+`MemberActions` (author-id dropping, self-removal policy); eligibility (approved +
+non-guest) is `User::isEligibleMember` / `scopeWhereEligibleMember()`.
 
 Read grammar on `Report::querySchema()`: include target `members` (relation
 `members`; bare / `:count` / `:exists` → `members_count`/`members_exists`) and filter

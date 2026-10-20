@@ -2,6 +2,7 @@
 
 namespace Zipavlin\Redline\Support;
 
+use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\User;
 
 /**
@@ -15,6 +16,25 @@ use Zipavlin\Redline\Models\User;
  */
 final class Members
 {
+    /**
+     * The full projection of one report's members, author excluded: fetches
+     * the live query when the relation was not eager-loaded, reuses the
+     * loaded relation otherwise, so every call site is one line and none can
+     * end up with a stale or half-hydrated list.
+     *
+     * @return array<int, array{id: string, name: string, initials: string}>
+     */
+    public static function forReport(Report $report): array
+    {
+        $users = $report->relationLoaded('members')
+            ? $report->members
+            : $report->members()->get();
+
+        return self::fromUsers(
+            collect($users)->reject(fn (User $user) => $report->isAuthoredBy($user->id)),
+        );
+    }
+
     /**
      * @param  iterable<int, User>  $users
      * @return array<int, array{id: string, name: string, initials: string}>
