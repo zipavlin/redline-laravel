@@ -10,6 +10,7 @@ use Zipavlin\Redline\Enums\Status;
 use Zipavlin\Redline\Http\Query\QuerySchema;
 use Zipavlin\Redline\Http\Query\ResourceQuery;
 use Zipavlin\Redline\Models\Report;
+use Zipavlin\Redline\Support\Members;
 
 /**
  * @see QuerySchema   the query grammar wire format (filter[]/include[]/sort[]/
@@ -104,7 +105,7 @@ class ReportController extends Controller
         $fresh = $this->actions->updateStatus($report, $this->authUser($request), $request->input('status'));
 
         return response()->json($fresh->toArray() + [
-            'members' => $fresh->memberRows($fresh->members()->get()),
+            'members' => Members::forReport($fresh),
         ]);
     }
 

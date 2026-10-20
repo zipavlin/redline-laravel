@@ -296,7 +296,7 @@ class ReportActions extends Action
             return;
         }
 
-        if (! $user->isApproved || $user->isGuest || $report->isAuthoredBy($user->id)) {
+        if (! $user->isEligibleMember || $report->isAuthoredBy($user->id)) {
             return;
         }
 

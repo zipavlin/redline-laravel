@@ -4,10 +4,10 @@ namespace Zipavlin\Redline\Actions;
 
 use Illuminate\Http\Request;
 use Zipavlin\Redline\Enums\Operation;
-use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Exceptions\ForbiddenAction;
 use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\User;
+use Zipavlin\Redline\Support\Members;
 
 /**
  * Report members - the write side of the report-user pivot (HTTP
@@ -29,15 +29,18 @@ class MemberActions extends Action
 
         // The author can never be a member; an author id is dropped like an
         // already-existing pair rather than rejected.
-        $userIds = $report->withoutAuthor($this->validatedUserIds($request));
+        $userIds = $this->withoutAuthor($report, $this->validatedUserIds($request));
         $this->assertUsersExist($userIds);
 
         // syncWithoutDetaching inserts only the missing pairs and leaves existing
         // ones untouched, so it is additive + idempotent without a unique-constraint
         // exception when a concurrent POST wins the race.
         $report->members()->syncWithoutDetaching($userIds);
+        // Drops any pre-loaded relation copy so the returned projection reads
+        // fresh pairs, never a stale in-memory list.
+        $report->unsetRelation('members');
 
-        return $report->memberRows($report->members()->get());
+        return Members::forReport($report);
     }
 
     /**
@@ -49,13 +52,50 @@ class MemberActions extends Action
     {
         $userIds = $this->validatedUserIds($request);
 
-        if (! $report->canUserRemoveMembers($user, $userIds)) {
+        if (! $this->canRemove($user, $report, $userIds)) {
             throw new ForbiddenAction;
         }
 
         $report->members()->detach($userIds);
+        $report->unsetRelation('members');
 
-        return $report->memberRows($report->members()->get());
+        return Members::forReport($report);
+    }
+
+    /**
+     * Drop the report's author from an incoming member id list: posting the
+     * author is a no-op (like an already-existing pair), never a validation
+     * error. The author is the `author` relation, while `members` holds
+     * additional collaborators.
+     *
+     * @param  array<int, string>  $userIds
+     * @return array<int, string>
+     */
+    private function withoutAuthor(Report $report, array $userIds): array
+    {
+        return array_values(array_filter(
+            $userIds,
+            fn (string $userId) => ! $report->isAuthoredBy($userId),
+        ));
+    }
+
+    /**
+     * Membership management is developer/author-only, with one exception: a
+     * reporter may remove exactly themselves. Any other target list, including
+     * one that pairs self with someone else, falls back to Operation::UPDATE.
+     * The self-removal branch also requires an eligible identity (approved,
+     * non-guest) - the same rule the write side enforces on members.
+     *
+     * @param  array<int, string>  $userIds
+     */
+    private function canRemove(User $user, Report $report, array $userIds): bool
+    {
+        if ($user->can(Operation::UPDATE, $report)) {
+            return true;
+        }
+
+        return $userIds === [$user->id]
+            && $user->isEligibleMember;
     }
 
     /**
@@ -85,8 +125,7 @@ class MemberActions extends Action
     {
         $knownIds = app(User::class)
             ->whereIn('id', $userIds)
-            ->where('status', 'approved')
-            ->where('role', '!=', Role::GUEST->value)
+            ->whereEligibleMember()
             ->pluck('id')
             ->all();
 

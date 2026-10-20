@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Zipavlin\Redline\Enums\Operation;
 use Zipavlin\Redline\Enums\Priority;
 use Zipavlin\Redline\Enums\QueryOperator;
 use Zipavlin\Redline\Enums\Status;
@@ -111,26 +110,6 @@ class Report extends Model
         return in_array($to, $this->allowedStatusTargets($user), true);
     }
 
-    /**
-     * Membership management is developer/author-only, with one exception: a
-     * reporter may remove exactly themselves. Any other target list, including
-     * one that pairs self with someone else, falls back to Operation::UPDATE.
-     * The self-removal branch also requires an eligible identity (approved,
-     * non-guest) - the same rule the write side enforces on members.
-     *
-     * @param  array<int, string>  $userIds
-     */
-    public function canUserRemoveMembers(User $user, array $userIds): bool
-    {
-        if ($user->can(Operation::UPDATE, $this)) {
-            return true;
-        }
-
-        return $userIds === [$user->id]
-            && $user->isApproved
-            && ! $user->isGuest;
-    }
-
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
@@ -157,43 +136,14 @@ class Report extends Model
     }
 
     /**
-     * The report's author is never one of its members: the author is the
-     * `author` relation, while `members` holds additional collaborators. One
-     * predicate so the read projection and the write endpoints cannot drift.
+     * The single read-side exclusion point for the members projection is
+     * Support\Members::forReport() - the author is never a member, and
+     * `isAuthoredBy()` is the predicate both that helper and the write side
+     * share.
      */
     public function isAuthoredBy(string $userId): bool
     {
         return $this->author_id !== null && $userId === $this->author_id;
-    }
-
-    /**
-     * Project attached users as `{id, name, initials}`, with the author removed
-     * (see isAuthoredBy()). The single read-side exclusion point shared by the
-     * `members` include, the member endpoints and the status response.
-     *
-     * @param  iterable<int, User>  $users
-     * @return array<int, array{id: string, name: string, initials: string}>
-     */
-    public function memberRows(iterable $users): array
-    {
-        return Members::fromUsers(
-            collect($users)->reject(fn (User $user) => $this->isAuthoredBy($user->id)),
-        );
-    }
-
-    /**
-     * Drop the author from an incoming member id list: posting the author is a
-     * no-op (like an already-existing pair), never a validation error.
-     *
-     * @param  array<int, string>  $userIds
-     * @return array<int, string>
-     */
-    public function withoutAuthor(array $userIds): array
-    {
-        return array_values(array_filter(
-            $userIds,
-            fn (string $userId) => ! $this->isAuthoredBy($userId),
-        ));
     }
 
     /**
@@ -414,13 +364,9 @@ class Report extends Model
                     relation: 'members',
                     operators: [QueryOperator::COUNT, QueryOperator::EXISTS],
                     eagerLoad: ['members:id,name'],
-                    resolver: function (Report $report): ?array {
-                        if (! $report->relationLoaded('members')) {
-                            return null;
-                        }
-
-                        return $report->memberRows($report->members);
-                    },
+                    resolver: fn (Report $report): ?array => $report->relationLoaded('members')
+                        ? Members::forReport($report)
+                        : null,
                 ),
                 // `url` reads Screenshot::$report_id and $id - both are always
                 // selected regardless of the requested attribute list.

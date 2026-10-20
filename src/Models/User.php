@@ -78,6 +78,18 @@ class User extends Model
         return $this->role === Role::GUEST;
     }
 
+    /**
+     * Membership eligibility: approved and non-guest. Pending accounts cannot
+     * log in to act as members, and guests exist only to file anonymous
+     * reports. One definition for every rule that names a member candidate -
+     * write-side validation, self-removal and claim - so the rule cannot
+     * drift between the places that enforce it.
+     */
+    public function getIsEligibleMemberAttribute(): bool
+    {
+        return $this->isApproved && ! $this->isGuest;
+    }
+
     public function getInitialsAttribute(): string
     {
         return str($this->name)
@@ -116,6 +128,19 @@ class User extends Model
     public function scopeWhereEmail(Builder $query, mixed $email): Builder
     {
         return $query->whereRaw('lower(email) = lower(?)', [self::normalizeEmail($email)]);
+    }
+
+    /**
+     * Constrain a query to rows whose `eligible-member` accessor is true:
+     * `status = approved` and any role but `guest`. The query form of
+     * getIsEligibleMemberAttribute() (see it for the rule).
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeWhereEligibleMember(Builder $query): Builder
+    {
+        return $query->where('status', 'approved')
+            ->where('role', '!=', Role::GUEST->value);
     }
 
     protected static function booted(): void
