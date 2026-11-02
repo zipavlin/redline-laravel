@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Zipavlin\Redline\Exceptions\Unauthenticated;
 use Zipavlin\Redline\Mail\PasswordResetMail;
 use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
@@ -74,7 +75,14 @@ class AuthController extends Controller
         $result = $this->auth->login($request->only('email', 'password'));
 
         if (isset($result['error'])) {
-            return $this->error([$result['error']], $result['code'] ?? 401);
+            // The provider-reported code already names auth (403) vs
+            // validation (422): only the auth denial carries the contract-v3
+            // `error: unauthenticated` marker, and never a 401 (Chrome pops
+            // its native Basic-Auth dialog for any credentialed 401).
+            $code = $result['code'] ?? 403;
+
+            return $this->error([$result['error']], $code,
+                error: $code === 403 ? Unauthenticated::MARKER : null);
         }
 
         if (($result['status'] ?? null) === 'pending') {
@@ -138,11 +146,27 @@ class AuthController extends Controller
     }
 
     /**
-     * GET /redline/api/auth/me (protected)
+     * GET /redline/api/auth/me
+     *
+     * The signed-out widget fires this on every mount: contract v3 answers
+     * 200 { user: null } when NO credentials are presented at all (no
+     * redline_token cookie, no Bearer header, as decided by RedlineApiAuth),
+     * because a 401 to a browser fetch pops Chrome's native Basic-Auth
+     * dialog. Presented-but-invalid credentials never reach this controller:
+     * the middleware denies them with the 403 + error marker. The
+     * authenticated shape (a bare user object) is unchanged.
      */
     public function me(Request $request): JsonResponse
     {
-        return response()->json(['user' => $this->authUser($request)->toArray()]);
+        $user = $request->user();
+
+        // Credentials (or their absence) move the body, so the answer
+        // must never be cached by intermediaries or the browser.
+        if (! $user instanceof User) {
+            return response()->json(['user' => null])->header('Cache-Control', 'no-store');
+        }
+
+        return response()->json(['user' => $user->toArray()])->header('Cache-Control', 'no-store');
     }
 
     /**
@@ -286,9 +310,15 @@ class AuthController extends Controller
      * (e.g. register's validation errors) - the frontend flattens whichever shape it
      * receives for display.
      */
-    protected function error(array $errors, int $code, bool $pending = false): JsonResponse
+    protected function error(array $errors, int $code, bool $pending = false, ?string $error = null): JsonResponse
     {
-        return response()->json(['errors' => $errors, 'pending' => $pending], $code);
+        $body = ['errors' => $errors, 'pending' => $pending];
+
+        if ($error !== null) {
+            $body['error'] = $error;
+        }
+
+        return response()->json($body, $code);
     }
 
     protected function issueToken(User $user, bool $remember = false): string

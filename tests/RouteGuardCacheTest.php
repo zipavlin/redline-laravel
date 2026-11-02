@@ -69,7 +69,8 @@ function loadCompiledRouteCacheInTest(): void
  * the 404 is the guard's, emitted ahead of authentication and both rate
  * limiters: no limiter side effect is ever made (spy sees no
  * tooManyAttempts/hit), and RedlineApiAuth never runs (an invalid rlm_
- * signature, which auth would have answered 401, stays a bare 404).
+ * signature, which auth would have answered 403 with the unauthenticated
+ * marker, stays a bare 404).
  */
 function expectMcpGuardInactivity(TestCase $test): void
 {

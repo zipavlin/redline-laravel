@@ -1,3 +1,30 @@
+# v0.3.1 (2026-11-02)
+
+## Fixed
+
+- Prevent repeated HTTP Basic Auth modal dialog -
+  Unauthenticated Redline requests no longer return code 401;
+- Handle broken/forged tokens -
+  Mangled Redline token no longer returns HTTP 500. It is now
+  handled like any other invalid login: a plain "not signed in" denial.
+
+## Changed
+
+- Signed-out answers look different (API contract version 3) -
+  `GET /auth/me` answers `200` with `{"user": null}` when nobody is signed
+  in, and every other auth-denied answer on the Redline API is now HTTP 403
+  with an `error: unauthenticated` marker instead of 401. The MCP endpoint
+  intentionally keeps its 401 challenge, so agent tooling behaves exactly
+  as before. Integrators: the bootstrap `version` field is now `3`.
+- Basic-Auth pointer for agent hosts - with the MCP feature on,
+  `redline:install`, `redline:mcp` and `redline:update` print a one-line
+  reminder: if your site sits behind HTTP Basic Auth, the MCP endpoint at
+  `{redline.path}/api/mcp` needs a server-side exemption, otherwise agent
+  bearer tokens never reach Redline (see the new docs chapter).
+- New MCP chapter in the docs - `docs/12-mcp.md` gathers everything
+  about the MCP server in one place, including "Behind HTTP Basic Auth
+  (Apache)" with Apache and nginx snippets for exempting the endpoint.
+
 # v0.3.0 (2026-10-20)
 
 ## Added

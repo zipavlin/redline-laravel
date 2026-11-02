@@ -114,7 +114,7 @@ declared as `[RedlineApiAuth::class, RedlineCsrf::class]`). It:
   `'bearer'` or `'cookie'` - which `RedlineCsrf` reads to decide whether to
   enforce double-submit CSRF.
 
-Failures return `401 {"message": …}`.
+Failures answer per surface (contract v3): on the browser API it is `403 {"message": <as before>, "error": "unauthenticated"}`; on the MCP route `{redline.path}/api/mcp` the denial stays a plain `401 {"message": <as before>}` so laravel/mcp's `AddWwwAuthenticateHeader` decorates it with the `WWW-Authenticate` Bearer challenge. This middleware also carries the contract-v3 anonymous pass-through: a `GET /auth/me` request with NO credentials at all (no cookie, no Bearer) reaches `AuthController::me()`, which answers `200 {"user": null}` - a presented-but-invalid credential is denied before the controller ever runs.
 
 ### Guest-mode bypass
 
@@ -129,7 +129,7 @@ code always has `$request->user()`. Guest submissions are additionally gated by:
 - the `redline-guest` rate limiter (per-minute, per-IP), applied inline via the
   `RateLimiter` facade - over the limit returns `429`.
 
-> Everything else with a missing or invalid token gets a plain `401`.
+> Everything else with a missing or invalid token gets a `403` with the `error: unauthenticated` marker (contract v3); only the MCP route keeps the plain `401`.
 
 ## RedlineCsrf (double-submit CSRF)
 

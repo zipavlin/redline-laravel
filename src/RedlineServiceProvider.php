@@ -104,7 +104,7 @@ class RedlineServiceProvider extends ServiceProvider
 
         // MCP: post-auth per-user bucket. Registered unconditionally but placed
         // INSIDE RedlineApiAuth in the middleware order, so the key falls back
-        // to IP only when no user was authenticated - the 401 path exits before
+        // to IP only when no user was authenticated - the denial path exits before
         // this limiter is ever reached.
         RateLimiter::for('redline-mcp', fn (Request $request) => Limit::perMinute(
             (int) env('REDLINE_MCP_THROTTLE', 120)

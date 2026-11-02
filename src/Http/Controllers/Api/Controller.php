@@ -3,6 +3,7 @@
 namespace Zipavlin\Redline\Http\Controllers\Api;
 
 use Illuminate\Http\Request;
+use Zipavlin\Redline\Exceptions\Unauthenticated;
 use Zipavlin\Redline\Models\User;
 
 /**
@@ -18,7 +19,7 @@ class Controller extends \Illuminate\Routing\Controller
         $user = $request->user();
 
         if (! $user instanceof User) {
-            abort(401, 'Unauthenticated.');
+            throw new Unauthenticated;
         }
 
         return $user;

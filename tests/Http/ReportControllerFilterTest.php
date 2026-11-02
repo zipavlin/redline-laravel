@@ -552,7 +552,8 @@ it('breaks a due_at tie with a secondary created_at sort', function () {
 // Auth
 // ---------------------------------------------------------------------------
 
-it('returns 401 when no token is provided', function () {
+it('denies the request with 403 and the error marker when no token is provided', function () {
     $this->getJson('/redline/api/report')
-        ->assertStatus(401);
+        ->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });

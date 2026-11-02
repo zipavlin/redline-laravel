@@ -368,6 +368,7 @@ class McpCommand extends Command
         // the route set is compiled, so an env change needs a fresh cache.
         $this->line('');
         $this->line('  <fg=yellow>●</> Run php artisan route:clear (or re-run route:cache / optimize) after changing REDLINE_* env values, or the endpoint will 404 from a stale cache.');
+        $this->line('  Behind HTTP Basic Auth? Bearer tokens (MCP) cannot pass the Authorization layer - exempt /'.config('redline.path', 'redline').'/api/mcp; see docs/12-mcp.md.');
     }
 
     private function printAppUrlNote(): void

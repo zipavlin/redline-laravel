@@ -73,11 +73,12 @@ it('accepts unauthenticated submission when guest mode is enabled', function () 
         ->assertStatus(201);
 });
 
-it('returns 401 for unauthenticated submission when guest mode is disabled', function () {
+it('denies an unauthenticated submission with 403 and the error marker when guest mode is disabled', function () {
     config(['redline.auth.guest' => false]);
 
     $this->postJson('/redline/api/report', makeReportData())
-        ->assertStatus(401);
+        ->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 // ---------------------------------------------------------------------------
@@ -115,9 +116,10 @@ it('returns 422 when body is missing', function () {
 // Auth
 // ---------------------------------------------------------------------------
 
-it('returns 401 when no token is provided', function () {
+it('denies the request with 403 and the error marker when no token is provided', function () {
     $this->postJson('/redline/api/report', makeReportData())
-        ->assertStatus(401);
+        ->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 // ---------------------------------------------------------------------------

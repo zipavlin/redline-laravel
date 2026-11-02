@@ -260,8 +260,11 @@ The plaintext is printed once, preceded by this warning (quoted verbatim, do not
   token from a cookie - none of the listed clients ever send `rlm_` via
   cookies.
 
-See "MCP server" in the README for per-client configuration (Claude Code,
-OpenCode, Codex, PI, Cursor, VS Code and Gemini CLI).
+The wizard above carries every agent preset (Claude Code, OpenCode, Codex,
+PI, Cursor, VS Code and Gemini CLI).
+
+Feature config, throttling and host considerations (including "Behind HTTP
+Basic Auth"): see [MCP Server](12-mcp.md).
 
 ## redline:update
 

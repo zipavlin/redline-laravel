@@ -253,6 +253,7 @@ class InstallCommand extends Command
         $this->line('  it issues a token and prints your agent\'s setup command.');
         $this->line('  Your MCP client endpoint:');
         $this->line('    <options=bold>'.$endpoint.'</>');
+        $this->line('  Behind HTTP Basic Auth? Bearer tokens (MCP) cannot pass the Authorization layer - exempt /'.config('redline.path', 'redline').'/api/mcp; see docs/12-mcp.md.');
     }
 
     /**

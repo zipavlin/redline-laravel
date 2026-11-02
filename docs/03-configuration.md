@@ -87,7 +87,7 @@ Three named limiters serve the HTTP surface, all per-minute per-IP:
 
 The guest limiter is enforced inside `RedlineApiAuth` itself; the other two are registered on the route groups.
 
-Two more serve the MCP endpoint, in pinned order, per "MCP server" in the README:
+Two more serve the MCP endpoint, in pinned order, per [MCP Server](12-mcp.md):
 
 | Limiter | Applied to | Knob | Default |
 |---|---|---|---|
@@ -104,7 +104,7 @@ Accepted values - exactly these five:
 - `videos`
 - `files`
 - `comments`
-- `mcp` (an MCP server at `/{REDLINE_PATH}/api/mcp` - see "MCP server" in the README)
+- `mcp` (an MCP server at `/{REDLINE_PATH}/api/mcp` - see [MCP Server](12-mcp.md))
 
 An unknown value is a config error (`Unknown Redline feature(s): …`) thrown at boot and wherever the list is read - it is never silently dropped.
 

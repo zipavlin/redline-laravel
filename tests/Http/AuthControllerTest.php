@@ -101,20 +101,22 @@ it('returns 200 and sets the auth cookie when logging in an existing user', func
         ->and($tokenCookie->getValue())->toBeString()->not->toBeEmpty();
 });
 
-it('returns 401 when the password is wrong', function () {
+it('denies a wrong password with 403 and the error marker', function () {
     $this->postJson('/redline/api/auth/register', [
         'name' => 'Jane', 'email' => 'jane@example.com', 'password' => 'secret123', 'role' => 'reporter',
     ])->assertStatus(200);
 
     $this->postJson('/redline/api/auth/login', [
         'email' => 'jane@example.com', 'password' => 'wrong',
-    ])->assertStatus(401);
+    ])->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
-it('returns a uniform 401 (not 404) when no account exists, to avoid email enumeration', function () {
+it('stays a uniform denial (not 404) when no account exists, to avoid email enumeration', function () {
     $this->postJson('/redline/api/auth/login', [
         'email' => 'nobody@example.com', 'password' => 'secret123',
-    ])->assertStatus(401);
+    ])->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 it('logs in when the email is supplied in a different case than stored', function () {
@@ -377,9 +379,10 @@ it('returns 200 on logout', function () {
         ->assertJson(['message' => 'Logged out.']);
 });
 
-it('returns 401 on logout without a token', function () {
+it('denies logout without a token with 403 and the error marker', function () {
     $this->deleteJson('/redline/api/auth')
-        ->assertStatus(401);
+        ->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 // ---------------------------------------------------------------------------

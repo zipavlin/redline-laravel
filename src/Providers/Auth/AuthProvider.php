@@ -125,10 +125,14 @@ abstract class AuthProvider
     /**
      * Verify login credentials and return user data or an error descriptor.
      *
+     * An authentication denial reports `code => 403` - the envelope renders
+     * as HTTP 403 with the `error: unauthenticated` marker added by the
+     * login endpoint (contract v3: a browser fetch never receives a 401).
+     *
      * Returns one of:
      *   ['user' => [...]]                                → success
      *   ['status' => 'pending', 'message' => '...', 'code' => 202]  → pending
-     *   ['error' => '...', 'code' => 401]               → wrong password
+     *   ['error' => '...', 'code' => 403]               → wrong password
      *   ['error' => '...', 'code' => 422]               → malformed credentials
      */
     public function login(array $data): array
@@ -150,11 +154,11 @@ abstract class AuthProvider
         if (! $user) {
             Hash::check($data['password'] ?? '', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi');
 
-            return ['error' => 'Invalid credentials.', 'code' => 401];
+            return ['error' => 'Invalid credentials.', 'code' => 403];
         }
 
         if (! Hash::check($data['password'] ?? '', $user->password ?? '')) {
-            return ['error' => 'Invalid credentials.', 'code' => 401];
+            return ['error' => 'Invalid credentials.', 'code' => 403];
         }
 
         if ($user->status === 'pending') {

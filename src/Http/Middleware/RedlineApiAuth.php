@@ -8,10 +8,12 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Firebase\JWT\SignatureInvalidException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Symfony\Component\HttpFoundation\Response;
 use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Enums\Role;
+use Zipavlin\Redline\Exceptions\Unauthenticated;
 use Zipavlin\Redline\Models\Token;
 use Zipavlin\Redline\Models\User;
 
@@ -61,7 +63,7 @@ class RedlineApiAuth
         if (
             config('redline.auth.guest', false)
             && $request->isMethod('POST')
-            && $request->is(config('redline.path').'/api/report')
+            && $request->is($this->basePath().'/api/report')
         ) {
             if (! $this->guestOriginAllowed($request)) {
                 return response()->json(['message' => 'Forbidden origin.'], 403);
@@ -77,7 +79,47 @@ class RedlineApiAuth
             return $next($request);
         }
 
-        return response()->json(['message' => 'Unauthenticated.'], 401);
+        // Contract v3: GET /auth/me completes anonymously when NO credentials
+        // are presented at all (the controller answers { user: null }) - the
+        // signed-out widget fires it on every mount, and a 401 to that
+        // credentialed fetch pops Chrome's native Basic-Auth dialog. Presented
+        // but invalid credentials are denied by the dispatch paths below and
+        // never reach the controller.
+        if ($request->isMethod('GET') && $request->is($this->basePath().'/api/auth/me')) {
+            return $next($request);
+        }
+
+        return $this->deny($request, 'Unauthenticated.');
+    }
+
+    /**
+     * The configured path prefix, trimmed of slashes. Request::is() compares
+     * against the request path, which Laravel always trims, while REDLINE_PATH
+     * itself may carry a leading or trailing slash (or an env var was quoted)
+     * - an untrimmed needle misses every comparison and, on the MCP branch,
+     * would silently downgrade the route to contract-v3 403s (losing the
+     * vendor's WWW-Authenticate challenge).
+     */
+    private function basePath(): string
+    {
+        return trim(config('redline.path', 'redline'), '/');
+    }
+
+    /**
+     * An authentication denial, per surface. The MCP route keeps contract-v2
+     * semantics (401, plain body): MCP clients expect the 401 and laravel/mcp
+     * decorates exactly 401s with its WWW-Authenticate header, and browsers
+     * never surface there - they cannot hold an `rlm_` token. Everywhere
+     * else (contract v3) the denial is a 403 with the stable `error` marker,
+     * built by Exceptions\Unauthenticated - one home for that envelope.
+     */
+    private function deny(Request $request, string $message): Response
+    {
+        if ($request->is($this->basePath().'/api/mcp')) {
+            return response()->json(['message' => $message], 401);
+        }
+
+        return (new Unauthenticated($message))->toResponse($request);
     }
 
     /**
@@ -91,7 +133,7 @@ class RedlineApiAuth
             // API tokens are bearer-header only (see the MCP contract): one
             // arriving through the cookie path is an explicit cross-surface
             // probe, so it is rejected - never silently treated as a JWT.
-            return response()->json(['message' => 'Unauthenticated.'], 401);
+            return $this->deny($request, 'Unauthenticated.');
         }
 
         if ($source === 'bearer' && str_starts_with($token, 'rlm_')) {
@@ -109,7 +151,7 @@ class RedlineApiAuth
         $payload = $this->verifyToken($token);
 
         if ($payload === null) {
-            return response()->json(['message' => 'Invalid or expired token.'], 401);
+            return $this->deny($request, 'Invalid or expired token.');
         }
 
         $user = app(User::class)->find($payload->sub);
@@ -117,14 +159,14 @@ class RedlineApiAuth
         // Reject tokens issued before a logout / password change (the
         // token_version bump invalidates every outstanding JWT for the user).
         if ($user === null || (int) ($payload->ver ?? 0) !== (int) ($user->token_version ?? 0)) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
+            return $this->deny($request, 'Unauthenticated.');
         }
 
         // A pending (not yet approved) account may not act at all. Rejecting
         // here closes every protected endpoint in one place - including the
         // admin-only approve/reset-password routes the account must not reach.
         if (! $user->isApproved) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
+            return $this->deny($request, 'Unauthenticated.');
         }
 
         // Expose the verified payload so controllers (e.g. refresh) never have
@@ -154,7 +196,7 @@ class RedlineApiAuth
             ->first();
 
         if ($token === null || $token->isRevoked()) {
-            return response()->json(['message' => 'Invalid or expired token.'], 401);
+            return $this->deny($request, 'Invalid or expired token.');
         }
 
         $user = $token->user;
@@ -167,7 +209,7 @@ class RedlineApiAuth
             || ! $user->isApproved
             || $user->isGuest
         ) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
+            return $this->deny($request, 'Unauthenticated.');
         }
 
         $token->forceFill([
@@ -268,7 +310,19 @@ class RedlineApiAuth
     {
         try {
             return JWT::decode($token, new Key($this->signingKey(), 'HS256'));
-        } catch (ExpiredException|SignatureInvalidException|\UnexpectedValueException) {
+        } catch (ExpiredException|SignatureInvalidException|\DomainException|\UnexpectedValueException $e) {
+            // The denial consumed a decode failure that v2 answered with a
+            // 500 - keep an operational trace of it before the refusal.
+            Log::warning('redline: refusing an unverifiable token: '.$e->getMessage());
+
+            // Malformed/structurally invalid tokens (e.g. a garbage Bearer) are
+            // presented-but-invalid credentials, not incidents: refuse and
+            // let the dispatch answer with the auth-denied envelope. The net
+            // also swallows a too-short APP_KEY (DomainException from
+            // firebase/php-jwt's Hmac key-length validation); that is a
+            // deliberate trade - a miskeyed host answers with the denial
+            // (an all-deny outage) instead of a loud 500 per request, so a
+            // browser fetch never sees a stack failure on this path.
             return null;
         }
     }

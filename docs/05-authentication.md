@@ -29,7 +29,7 @@ On protected routes, `Zipavlin\Redline\Http\Middleware\RedlineApiAuth` extracts 
 
 ### token_version invalidation
 
-Every JWT carries the user's `token_version` in the `ver` claim. `Zipavlin\Redline\Http\Middleware\RedlineApiAuth` rejects any token whose `ver` does not match the stored value (401). `Zipavlin\Redline\Models\User::bumpTokenVersion()` advances the counter and is called on **logout** and on every **password change** (self-service reset and admin-triggered reset), instantly invalidating every outstanding JWT for that user.
+Every JWT carries the user's `token_version` in the `ver` claim. `Zipavlin\Redline\Http\Middleware\RedlineApiAuth` rejects any token whose `ver` does not match the stored value (contract v3: HTTP 403 with `{"error":"unauthenticated"}` on the API surface - the browser surface never answers an authentication denial with a 401; the MCP route keeps the plain 401). `Zipavlin\Redline\Models\User::bumpTokenVersion()` advances the counter and is called on **logout** and on every **password change** (self-service reset and admin-triggered reset), instantly invalidating every outstanding JWT for that user.
 
 ### CSRF: double-submit contract
 
@@ -121,8 +121,8 @@ The provider is bound from `config('redline.auth.provider')` / `REDLINE_AUTH_PRO
 - `canRegister()` is `false` and `register()` throws: `POST /{path}/api/auth/register` answers **403**. `canSelectRole()` is `false`.
 - `loginMode()` is `'session'`, surfaced through bootstrap as `capabilities.auth.login_mode`. The widget renders **no** login form in this mode; it calls `POST /{path}/api/auth/login` with an **empty body**.
 - `login()` reads the host Laravel user via `Auth::guard()->user()`:
-  - no host user → **401** `Not authenticated with the host application.`;
-  - host user without an email → **401** `Host user has no email address.` (fail closed - the email is the only join key to a redline identity);
+  - no host user → **403 + `{"error":"unauthenticated"}`** `Not authenticated with the host application.` (providers report authentication denials with code 403 themselves - contract v3, so the wire never carries a 401);
+  - host user without an email → **403 + `{"error":"unauthenticated"}`** `Host user has no email address.` (fail closed - the email is the only join key to a redline identity);
   - a redline user with the host user's email already exists → that user is returned **as-is** (no name sync, no role change);
   - otherwise a redline user is provisioned: `role = reporter` (fixed - never resolved from config), `status = approved`, `password = null`, with the host user's `name` (falling back to the email) and `email` copied across.
 - The response is the usual `{ user: {...} }` with the HttpOnly `redline_token` cookie. A second login reuses the same redline user - no duplicate is created.
@@ -188,7 +188,7 @@ Some providers admit users in two steps. Pending responses are signaled by **HTT
 - **Throttle**: anonymous submissions are rate-limited by the `redline-guest` limiter, `REDLINE_AUTH_GUEST_THROTTLE` default **20/min/IP**; over the limit → **429**.
 - Guest submissions are exempt from CSRF (they carry no cookie auth).
 
-> **Custom path caveat (verified in `Zipavlin\Redline\Http\Middleware\RedlineApiAuth`):** the guest exemption matches the *literal* path `redline/api/report` (`$request->is('redline/api/report')`). If you set a custom `REDLINE_PATH`, the guest bypass will **not** match and anonymous submissions will get 401 - cookie/Bearer-authenticated requests are unaffected. `REDLINE_ALLOWED_ORIGINS` is a separate escape hatch for the CSRF Origin check on cookie-mutating requests, not a substitute for the guest path issue.
+> **Custom `REDLINE_PATH`:** `RedlineApiAuth` compares the *trimmed* configured path (`trim(config('redline.path', 'redline'), '/')`) against the request path, so a custom `REDLINE_PATH` - with or without slashes - is matched by the guest exemption, the anonymous `GET /auth/me` branch and the MCP 401 branch alike (a leading-slash value is pinned round-trip by the test suite). `REDLINE_ALLOWED_ORIGINS` is a separate escape hatch for the CSRF Origin check on cookie-mutating requests.
 
 ## Email verification & password reset
 
@@ -198,7 +198,7 @@ Some providers admit users in two steps. Pending responses are signaled by **HTT
 
 **Reset.** `POST /{path}/api/auth/reset-password` is protected by Laravel's `signed` middleware; it validates the new password (min 8 chars), saves it, and calls `bumpTokenVersion()` so all previously issued JWTs are rejected. Invalid/expired links → 422.
 
-**Login anti-enumeration.** The base login (`AuthProvider::login()`) validates `email` (required, valid address, max 255) and `password` (required, string) and returns a **422** with a readable message for malformed input before any lookup. Past that point it returns the same `Invalid credentials.` 401 for a nonexistent email and a wrong password, and runs a dummy hash check on the not-found path to keep timing comparable. (Session-based providers such as `LaravelAuthProvider` bypass this validation entirely - they have no credentials to check.)
+**Login anti-enumeration.** The base login (`AuthProvider::login()`) validates `email` (required, valid address, max 255) and `password` (required, string) and returns a **422** with a readable message for malformed input before any lookup. Past that point it returns the same `Invalid credentials.` denial (code 403, rendered with the `{"error":"unauthenticated"}` marker on the wire) for a nonexistent email and a wrong password, and runs a dummy hash check on the not-found path to keep timing comparable. (Session-based providers such as `LaravelAuthProvider` bypass this validation entirely - they have no credentials to check.)
 
 ## Security notes
 
@@ -218,5 +218,6 @@ Some providers admit users in two steps. Pending responses are signaled by **HTT
 - [Configuration](03-configuration.md) - full env-var reference and `config/redline.php` structure
 - [Guards](06-guards.md) - when Redline is active (environment/debug guards, `REDLINE_GUARD_EXCLUDE`)
 - [Commands](08-commands.md) - `redline:install`, `redline:update`, `redline:user`, `redline:remove`
+- [MCP Server](12-mcp.md) - the `mcp` feature, `rlm_` bearer tokens and the "Behind HTTP Basic Auth" host recipes
 - [Emails](09-emails.md) - verification, password-reset and invitation mail templates
 - [Widget & dashboard](11-widget-dashboard.md) - the identity modal, capabilities from `/api/bootstrap`, and client auth flow

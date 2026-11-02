@@ -83,21 +83,21 @@ class LaravelAuthProvider extends AuthProvider implements Listable
         $laravel = Auth::guard($this->guardName())->user();
 
         if ($laravel === null) {
-            return ['error' => 'Not authenticated with the host application.', 'code' => 401];
+            return ['error' => 'Not authenticated with the host application.', 'code' => 403];
         }
 
         // Joined case-insensitively so mixed-case/whitespace rows still match.
         $email = mb_strtolower(trim((string) $laravel->email));
 
         if ($email === '') {
-            return ['error' => 'Host user has no email address.', 'code' => 401];
+            return ['error' => 'Host user has no email address.', 'code' => 403];
         }
 
         $user = $this->findByEmail($email) ?? $this->provisionUser($laravel, $email);
 
         // A newly provisioned user is always approved; only a pre-existing pending
         // identity reaches this. Minting a token here would contradict the
-        // middleware, which 401s every token belonging to a non-approved user.
+        // middleware, which denies (HTTP 403 + marker) every token belonging to a non-approved user.
         if (! $user->isApproved) {
             return ['status' => 'pending', 'message' => 'Account not yet approved.', 'code' => 202];
         }

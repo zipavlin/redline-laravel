@@ -21,7 +21,7 @@ class BootstrapController extends Controller
     public function index(): JsonResponse
     {
         return response()->json([
-            'version' => 2,
+            'version' => 3,
             'features' => RedlineServiceProvider::getFeatures(),
             'capabilities' => [
                 'guest_reporting' => (bool) config('redline.auth.guest', false),

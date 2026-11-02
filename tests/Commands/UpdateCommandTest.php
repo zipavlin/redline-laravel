@@ -290,3 +290,17 @@ it('prints an explicit none-enabled feature state in dry-run', function () {
         ->expectsOutputToContain('   - Features: none enabled - set REDLINE_FEATURES or run `php artisan redline:enable`.')
         ->assertExitCode(0);
 });
+it('stops a host behind HTTP Basic Auth off when mcp is off, points it at docs/12-mcp.md when on', function () {
+    // the pointer rides the post-update summary's feature-state area
+    config(['redline.features' => ['files', 'comments', 'mcp']]);
+
+    $this->artisan('redline:update --force')
+        ->expectsOutputToContain('docs/12-mcp.md')
+        ->assertExitCode(0);
+
+    config(['redline.features' => ['files', 'comments']]);
+
+    $this->artisan('redline:update --force')
+        ->doesntExpectOutputToContain('docs/12-mcp.md')
+        ->assertExitCode(0);
+});

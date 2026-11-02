@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
+use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
 use Zipavlin\Redline\Support\ComposerScripts;
@@ -247,6 +248,10 @@ class UpdateCommand extends Command
         });
         $this->line('  Assets: re-published to '.public_path('vendor/redline').'.');
         $this->line('  Features: '.$this->featuresState().'.');
+
+        if (in_array(Feature::MCP->value, RedlineServiceProvider::getFeatures(), true)) {
+            $this->line('  Behind HTTP Basic Auth? Bearer tokens (MCP) cannot pass the Authorization layer - exempt /'.config('redline.path', 'redline').'/api/mcp; see docs/12-mcp.md.');
+        }
 
         if ($untouched !== []) {
             $this->line('  Left untouched: '.implode(' and ', $untouched).'.');

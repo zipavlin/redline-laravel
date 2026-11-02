@@ -161,7 +161,8 @@ it('S6: rejects a token after the user logs out', function () {
 
     $this->getJson('/redline/api/auth/me', $headers)->assertStatus(200);
     $this->deleteJson('/redline/api/auth', [], $headers)->assertStatus(200);
-    $this->getJson('/redline/api/auth/me', $headers)->assertStatus(401);
+    $this->getJson('/redline/api/auth/me', $headers)->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 it('S6: rejects a token after an admin resets the password', function () {
@@ -172,7 +173,8 @@ it('S6: rejects a token after an admin resets the password', function () {
     $this->getJson('/redline/api/auth/me', $victimHeaders)->assertStatus(200);
     $this->postJson("/redline/api/user/{$victim['id']}/reset-password", ['password' => 'brandnew123'], $admin)
         ->assertStatus(200);
-    $this->getJson('/redline/api/auth/me', $victimHeaders)->assertStatus(401);
+    $this->getJson('/redline/api/auth/me', $victimHeaders)->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 // ---------------------------------------------------------------------------
@@ -190,14 +192,15 @@ it('S12: rejects a pending admin token on every protected endpoint', function ()
     $this->postJson('/redline/api/user', [
         'name' => 'Created By Pending', 'email' => 'created-by-pending@example.com',
         'role' => 'reporter', 'password' => 'secret123',
-    ], $headers)->assertStatus(401);
+    ], $headers)->assertStatus(403)->assertJson(['error' => 'unauthenticated']);
 
-    $this->patchJson("/redline/api/user/{$target['id']}", ['role' => 'admin'], $headers)->assertStatus(401);
-    $this->deleteJson("/redline/api/user/{$target['id']}", [], $headers)->assertStatus(401);
-    $this->postJson("/redline/api/user/{$pendingAdmin->id}/approve", [], $headers)->assertStatus(401);
+    $this->patchJson("/redline/api/user/{$target['id']}", ['role' => 'admin'], $headers)->assertStatus(403)->assertJson(['error' => 'unauthenticated']);
+    $this->deleteJson("/redline/api/user/{$target['id']}", [], $headers)->assertStatus(403)->assertJson(['error' => 'unauthenticated']);
+    $this->postJson("/redline/api/user/{$pendingAdmin->id}/approve", [], $headers)->assertStatus(403)->assertJson(['error' => 'unauthenticated']);
     $this->postJson("/redline/api/user/{$target['id']}/reset-password", ['password' => 'brandnew123'], $headers)
-        ->assertStatus(401);
-    $this->getJson('/redline/api/auth/refresh', $headers)->assertStatus(401);
+        ->assertStatus(403)->assertJson(['error' => 'unauthenticated']);
+    $this->getJson('/redline/api/auth/refresh', $headers)->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 
     // None of the attempts changed anything.
     expect(app(User::class)->find($target['id'])->role)->toBe(Role::REPORTER)
@@ -216,7 +219,8 @@ it('S12: revokes the outstanding token when a user is moved back to pending', fu
 
     expect((int) app(User::class)->find($victim['id'])->token_version)->toBe(1);
 
-    $this->getJson('/redline/api/auth/me', $victimHeaders)->assertStatus(401);
+    $this->getJson('/redline/api/auth/me', $victimHeaders)->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 it('S12: keeps token_version when pending is written to an already-pending user', function () {
@@ -239,7 +243,10 @@ it('S12: keeps token_version when pending is written to an already-pending user'
 it('S7: ignores a token supplied via the query string', function () {
     $token = makeAuthToken(makeUser('developer'));
 
-    $this->getJson('/redline/api/auth/me?token='.$token)->assertStatus(401);
+    // A query-string token counts as NO credentials: the token is simply not
+    // accepted, so auth/me answers 200 with a null user.
+    $this->getJson('/redline/api/auth/me?token='.$token)->assertStatus(200)
+        ->assertJson(['user' => null]);
 });
 
 // ---------------------------------------------------------------------------

@@ -24,13 +24,15 @@ function makeReport(array $user, array $overrides = []): array
 // Auth: me / refresh
 // ---------------------------------------------------------------------------
 
-it('auth/me returns the authenticated user and 401 without a token', function () {
+it('auth/me returns the authenticated user and answers user null without any credentials', function () {
     $user = makeUser('developer');
     $this->getJson('/redline/api/auth/me', ['Authorization' => 'Bearer '.makeAuthToken($user)])
         ->assertStatus(200)
         ->assertJsonPath('user.email', $user['email']);
 
-    $this->getJson('/redline/api/auth/me')->assertStatus(401);
+    $this->getJson('/redline/api/auth/me')
+        ->assertStatus(200)
+        ->assertJson(['user' => null]);
 });
 
 it('auth/refresh issues a fresh token for the current user', function () {

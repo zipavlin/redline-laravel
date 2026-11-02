@@ -252,7 +252,8 @@ it('runs the wizard on a bare invocation: user select, agent select, mint with b
         ->expectsChoice('Which account gets the token?', "{$user->email} (developer)", ["{$user->email} (developer)"], true)
         ->expectsChoice('Which agent will use this token?', 'OpenCode', redlineAgentChoices(), true)
         ->assertExitCode(0)
-        ->expectsOutputToContain('Token created for');
+        ->expectsOutputToContain('Token created for')
+        ->expectsOutputToContain('docs/12-mcp.md');
 
     $row = app(Token::class)->where('user_id', $user->id)->first();
 
@@ -420,6 +421,9 @@ it('lists tokens with the hint and humanized agent label', function () {
 
     $output = Artisan::output();
     $flat = redlineFlatOutput($output);
+
+    // The Basic Auth pointer belongs to token issuance only.
+    expect($flat)->not->toContain('docs/12-mcp.md');
 
     expect($flat)
         ->toContain('ClaudeCode')

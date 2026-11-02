@@ -74,14 +74,17 @@ it('denies a session login through the auth envelope when no host session exists
     try {
         // No acting host user: at this point in the pipeline the guard cannot
         // claim activation. The request must still reach the controller, whose
-        // provider answers 401 - a guard-middleware 404 would hide the surface.
+        // provider answers 403 - a guard-middleware 404 would hide the surface.
         $this->postJson('/redline/api/auth/login', [])
-            ->assertUnauthorized()
-            ->assertJsonPath('errors.0', 'Not authenticated with the host application.');
+            ->assertStatus(403)
+            ->assertJsonPath('errors.0', 'Not authenticated with the host application.')
+            ->assertJson(['error' => 'unauthenticated']);
 
         // A protected endpoint without redline credentials is answered by
-        // RedlineApiAuth (401), not by RedlineActive (404).
-        $this->getJson('/redline/api/auth/me')->assertUnauthorized();
+        // RedlineApiAuth under contract v3: me() with NO credentials completes
+        // anonymously (200 { user: null }), not a RedlineActive 404 - which
+        // proves the surface is served, not hidden by the guard.
+        $this->getJson('/redline/api/auth/me')->assertStatus(200)->assertJson(['user' => null]);
     } finally {
         bootBackAfterLaravelGuardPair();
     }

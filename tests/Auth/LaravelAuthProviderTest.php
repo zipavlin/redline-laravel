@@ -51,18 +51,18 @@ function actAsHostUser(array $attributes = []): GenericUser
 // Login exchange
 // ---------------------------------------------------------------------------
 
-it('returns 401 when no host application user is logged in', function () {
+it('returns 403 when no host application user is logged in', function () {
     $result = laravelAuthProvider()->login([]);
 
-    expect($result)->toBe(['error' => 'Not authenticated with the host application.', 'code' => 401]);
+    expect($result)->toBe(['error' => 'Not authenticated with the host application.', 'code' => 403]);
 });
 
-it('fails closed with 401 when the host user has no email address', function () {
+it('fails closed with 403 when the host user has no email address', function () {
     actAsHostUser(['email' => '']);
 
     $result = laravelAuthProvider()->login([]);
 
-    expect($result)->toBe(['error' => 'Host user has no email address.', 'code' => 401]);
+    expect($result)->toBe(['error' => 'Host user has no email address.', 'code' => 403]);
 });
 
 it('provisions a reporter on first login and copies name and email', function () {
@@ -159,12 +159,12 @@ it('stores the normalized email when provisioning', function () {
         ->and(app(User::class)->where('email', 'case@example.com')->count())->toBe(1);
 });
 
-it('fails closed with 401 for a whitespace-only host email', function () {
+it('fails closed with 403 for a whitespace-only host email', function () {
     actAsHostUser(['email' => '   ']);
 
     $result = laravelAuthProvider()->login([]);
 
-    expect($result)->toBe(['error' => 'Host user has no email address.', 'code' => 401]);
+    expect($result)->toBe(['error' => 'Host user has no email address.', 'code' => 403]);
 });
 
 // ---------------------------------------------------------------------------

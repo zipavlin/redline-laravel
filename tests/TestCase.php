@@ -64,6 +64,19 @@ class TestCase extends Orchestra
         self::$bootAuth = $authClass;
     }
 
+    /**
+     * Boot-time REDLINE_PATH override for the current app instance; mirrors
+     * bootWithGuard(). Set BEFORE boot so routes and the MCP endpoint mount
+     * under the custom prefix exactly as a host whose .env carries
+     * REDLINE_PATH (possibly with slashes) would produce.
+     */
+    private static ?string $bootPath = null;
+
+    public static function bootWithPath(?string $path): void
+    {
+        self::$bootPath = $path;
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -176,6 +189,12 @@ class TestCase extends Orchestra
 
         if (self::$bootAuth !== null) {
             $app['config']->set('redline.auth.provider', self::$bootAuth);
+        }
+
+        // REDLINE_PATH override (see bootWithPath) - set before providers
+        // boot so route registration and the MCP mount see the prefix.
+        if (self::$bootPath !== null) {
+            $app['config']->set('redline.path', self::$bootPath);
         }
     }
 }

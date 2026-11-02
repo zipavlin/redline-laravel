@@ -118,9 +118,10 @@ it('writes REDLINE_FEATURES when features are selected during install', function
 });
 
 /**
- * Selecting the mcp feature surfaces the two setup hints the flag alone
- * cannot give: where to mint a token, and which endpoint to point the MCP
- * client at (derived from config, not a hardcoded host).
+ * Selecting the mcp feature surfaces the setup hints the flag alone cannot
+ * give: where to mint a token, which endpoint to point the MCP client at
+ * (derived from config, not a hardcoded host), and the HTTP Basic Auth
+ * pointer when the host has edge Basic Auth turned on.
  */
 it('mcp selection prints the token + endpoint hints during install', function () {
     // config-only: putenv() here would leak APP_URL process-wide and flake
@@ -138,6 +139,7 @@ it('mcp selection prints the token + endpoint hints during install', function ()
         ->expectsConfirmation('Would you like to create the first admin user?', 'no')
         ->expectsOutputToContain('redline:mcp')
         ->expectsOutputToContain('staging.example.com/redline/api/mcp')
+        ->expectsOutputToContain('docs/12-mcp.md')
         ->assertExitCode(0);
 });
 
@@ -154,6 +156,7 @@ it('an install without mcp stays quiet about tokens and endpoints', function () 
         ->expectsConfirmation('Would you like to create the first admin user?', 'no')
         ->doesntExpectOutputToContain('redline:mcp')
         ->doesntExpectOutputToContain('redline/api/mcp')
+        ->doesntExpectOutputToContain('docs/12-mcp.md')
         ->assertExitCode(0);
 });
 

@@ -171,15 +171,18 @@ it('rejects a reporter filtering by email with 422', function () {
         ->assertJsonValidationErrors(['filter.email:like']);
 });
 
-it('rejects a pending caller from the user index with 401', function () {
+it('rejects a pending caller from the user index with 403 and the error marker', function () {
     $pending = makePendingUser();
 
     $this->getJson('/redline/api/user', ['Authorization' => 'Bearer '.makeAuthToken($pending->toArray())])
-        ->assertStatus(401);
+        ->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 it('rejects unauthenticated callers from the user index', function () {
-    $this->getJson('/redline/api/user')->assertStatus(401);
+    $this->getJson('/redline/api/user')
+        ->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 it('serves the widget member-picker query to a reporter', function () {

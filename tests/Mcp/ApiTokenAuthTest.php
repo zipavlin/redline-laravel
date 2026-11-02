@@ -121,8 +121,8 @@ test('an rlm_-shaped cookie value is explicitly rejected on the MCP route', func
 test('an rlm_-shaped cookie value is explicitly rejected on existing protected endpoints', function () {
     $this->withUnencryptedCookies(['redline_token' => tokenFor(makeTokenOwner())])
         ->get('/redline/api/report')
-        ->assertUnauthorized()
-        ->assertJson(['message' => 'Unauthenticated.']);
+        ->assertStatus(403)
+        ->assertJson(['message' => 'Unauthenticated.', 'error' => 'unauthenticated']);
 });
 
 test('every 401 from the MCP route carries WWW-Authenticate', function () {

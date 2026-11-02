@@ -11,3 +11,4 @@
 9. [Emails](09-emails.md)
 10. [Middleware](10-middleware.md)
 11. [Widget & Dashboard](11-widget-dashboard.md)
+12. [MCP Server](12-mcp.md)

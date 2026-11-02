@@ -114,7 +114,8 @@ it('resets the password via a valid signed link and revokes old tokens', functio
         ->assertStatus(200);
 
     // Old token is now revoked (token_version bumped).
-    $this->getJson('/redline/api/auth/me', $oldToken)->assertStatus(401);
+    $this->getJson('/redline/api/auth/me', $oldToken)->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 
     // The new password works.
     expect(Hash::check('brandnew123', app(User::class)->find($user->id)->password))->toBeTrue();

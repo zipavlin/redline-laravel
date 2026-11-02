@@ -105,8 +105,10 @@ Responses:
 - `200` - `{ "user": { ... } }` plus auth cookies.
 - `202` - `{ "errors": ["..."], "pending": true }` when the account is still pending
   approval.
-- `401` / `403` - `{ "errors": ["..."] }` on bad credentials or a provider that disallows
-  login (`canLogin()` false → 403).
+- `403` - `{ "errors": ["..."], "error": "unauthenticated" }` on bad credentials; providers themselves report
+  authentication denials with code 403 (contract v3: a browser fetch never receives a 401); a provider that
+  disallows login (`canLogin()` false → 403) is a plain policy refusal without the marker; pending stays the
+  202 + `pending: true` envelope.
 - `422` - validation errors for `email` / `password`.
 
 ### `GET /auth/verify`
@@ -166,7 +168,9 @@ GET /{redline.path}/api/auth/me
 ```
 
 - `200` - `{ "user": { ... } }` (full user model; `password` / `token_version` always
-  hidden).
+  hidden) with valid credentials - or `{ "user": null }` when NO credentials are presented at all
+  (contract v3: the signed-out widget probe completes anonymously; a presented-but-invalid
+  credential answers `403` `{"message": "Unauthenticated.", "error": "unauthenticated"}`).
 
 ### `GET /auth/refresh` (protected)
 
@@ -765,8 +769,8 @@ All error responses are JSON unless noted. The two envelope shapes:
 | `201` | created (report, comment, screenshot, video, user) |
 | `202` | account pending - register/login returned `{ "errors": [...], "pending": true }` |
 | `204` | deleted (report, comment, user) |
-| `401` | unauthenticated: `{ "message": "Invalid or expired token." }` / `{ "message": "Unauthenticated." }` (missing token, bad signature/expiry, or `token_version` mismatch) |
-| `403` | forbidden: `"Forbidden."`, `"Admin access required."`, `"Invalid status transition."`, `"Feature disabled."`, `"Registration not allowed."`, `"Forbidden origin."` (guest) |
+| `403` | unauthenticated/auth-denied on the API surface: `{ "message": "Invalid or expired token." }` / `{ "message": "Unauthenticated." }` with `"error": "unauthenticated"` (missing token, bad signature/expiry, `token_version` mismatch, pending user) - plus ordinary forbidden without the marker: `"Forbidden."`, `"Admin access required."`, `"Invalid status transition."`, `"Feature disabled."`, `"Registration not allowed."`, `"Login not available via this provider."`, `"Forbidden origin."` (guest) |
+| `401` | MCP endpoint only (`{redline.path}/api/mcp`): `{ "message": ... }` alongside laravel/mcp's `WWW-Authenticate` Bearer challenge - the API surface never answers a browser fetch with 401 (contract v3) |
 | `404` | not found, including parent/child mismatch on nested routes and missing media rows |
 | `409` | **duplicate media** - `{ "message": "Screenshot already exists for this report." }` / `{ "message": "Video already exists for this report." }` (one media per report) |
 | `422` | validation / grammar - never a silent ignore: unknown or non-whitelisted group, target, operator, or attribute; invalid operator for a field; `per_page` outside 1–100; `page` < 1; unknown status/group; unknown priority value; unknown due state; two `group_by` columns; last-admin protection on user endpoints |

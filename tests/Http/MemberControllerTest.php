@@ -246,7 +246,8 @@ it('rejects a pending user at the middleware - no self-removal', function () {
         "/redline/api/report/{$report->id}/member",
         ['user_ids' => [$pending->id]],
         ['Authorization' => 'Bearer '.makeAuthToken($pending->toArray())],
-    )->assertStatus(401);
+    )->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
 
     expect(DB::connection('redline')->table('redline_members')->where('report_id', $report->id)->count())->toBe(1);
 });

@@ -165,7 +165,7 @@ it('refuses a session login for an existing pending redline user without minting
         ->assertJsonPath('pending', true)
         ->assertJsonPath('errors.0', 'Account not yet approved.');
 
-    // No JWT is minted for a pending identity (the middleware would 401 it anyway).
+    // No JWT is minted for a pending identity (the middleware would 403 it anyway).
     $tokenCookie = collect($response->baseResponse->headers->getCookies())
         ->first(fn ($c) => $c->getName() === 'redline_token');
 
@@ -173,12 +173,13 @@ it('refuses a session login for an existing pending redline user without minting
         ->and(app(User::class)->where('email', 'pending-session@example.com')->count())->toBe(1);
 });
 
-it('returns 401 on login when no host application user is logged in', function () {
+it('denies login with 403 and the error marker when no host application user is logged in', function () {
     $this->app->singleton(AuthProvider::class, LaravelAuthProvider::class);
 
     $this->postJson('/redline/api/auth/login', [])
-        ->assertStatus(401)
-        ->assertJsonPath('errors.0', 'Not authenticated with the host application.');
+        ->assertStatus(403)
+        ->assertJsonPath('errors.0', 'Not authenticated with the host application.')
+        ->assertJson(['error' => 'unauthenticated']);
 });
 
 it('rejects a session login from a foreign Origin with 403', function () {

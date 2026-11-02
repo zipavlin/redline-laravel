@@ -10,6 +10,7 @@ use Zipavlin\Redline\Enums\Operation;
 use Zipavlin\Redline\Enums\QueryCapability;
 use Zipavlin\Redline\Enums\Role;
 use Zipavlin\Redline\Exceptions\ForbiddenAction;
+use Zipavlin\Redline\Exceptions\Unauthenticated;
 use Zipavlin\Redline\Mail\RegistrationApprovedMail;
 use Zipavlin\Redline\Mail\UserInvitationMail;
 use Zipavlin\Redline\Models\User;
@@ -227,13 +228,17 @@ class UserActions extends Action
     // -----------------------------------------------------------------------
 
     /**
-     * The admin gate for every non-list operation: a missing identity is the
-     * middleware's 401 (defense-in-depth, kept verbatim from authUser()), a
-     * non-admin caller is the endpoint's own 403 vocabulary.
+     * The admin gate for every non-list operation: a missing identity is
+     * defense-in-depth behind the middleware's own denial (contract v3:
+     * 403 + the error marker), a non-admin caller is the endpoint's own
+     * 403 vocabulary.
      */
     private function assertAdmin(Request $request): void
     {
-        abort_unless($request->user() instanceof User, 401, 'Unauthenticated.');
+        if (! $request->user() instanceof User) {
+            // Unauthenticated (403): prevents the Basic-auth dialog from re-triggering.
+            throw new Unauthenticated;
+        }
 
         if (! $request->user()->isAdmin) {
             throw new ForbiddenAction('Admin access required.');
