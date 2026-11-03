@@ -7,6 +7,7 @@ use Illuminate\Contracts\Container\BindingResolutionException;
 use ReflectionClass;
 use Symfony\Component\Console\Exception\InvalidArgumentException;
 use Symfony\Component\Console\Question\ChoiceQuestion;
+use Throwable;
 use Zipavlin\Redline\Contracts\Listable;
 use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
@@ -17,6 +18,7 @@ use Zipavlin\Redline\Providers\Guard\GuardProvider;
 use Zipavlin\Redline\Providers\Guard\IpGuardProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
 use Zipavlin\Redline\Support\ComposerScripts;
+use Zipavlin\Redline\Support\UpdateMarker;
 
 class InstallCommand extends Command
 {
@@ -46,6 +48,8 @@ class InstallCommand extends Command
         $this->handleAssetsAndConfig();
         $this->handleComposerHook();
         $this->handleFirstUser();
+
+        $this->markCurrent();
 
         return self::SUCCESS;
     }
@@ -400,27 +404,48 @@ class InstallCommand extends Command
     }
 
     /**
-     * Register the composer `post-package-update` hook, so future
-     * `composer update` runs apply Redline updates automatically (see
-     * ComposerHook). Never prompts and never fails the install - an unusual
-     * composer.json only warns, and redline:update can add it later.
+     * Register the composer `post-autoload-dump` hook (and retire any legacy
+     * per-package `post-package-update` entry), so future composer runs apply
+     * Redline updates automatically (see ComposerHook). Never prompts and
+     * never fails the install - an unusual composer.json only warns, and
+     * redline:update can migrate it later.
      */
     private function handleComposerHook(): void
     {
         $this->line('  <options=bold>Composer updates</>');
 
         $scripts = new ComposerScripts($this->composerJsonPath());
+        $hadLegacy = $scripts->hasUpdateHook();
+        $hadAutoload = $scripts->hasAutoloadHook();
 
-        if ($scripts->hasUpdateHook()) {
-            $this->line('  <fg=yellow>•</> Composer post-package-update hook already present in composer.json.');
-        } elseif ($scripts->addUpdateHook()) {
-            $this->line('  <fg=green>✓</> Added the composer post-package-update hook to composer.json (runs redline:update automatically).');
+        if ($hadAutoload && ! $hadLegacy) {
+            $this->line('  <fg=yellow>•</> Composer post-autoload-dump hook already present in composer.json.');
+        } elseif ($scripts->migrateHooks()) {
+            $this->line($hadLegacy && $hadAutoload
+                ? '  <fg=green>✓</> Removed the legacy composer post-package-update hook (post-autoload-dump hook already present).'
+                : ($hadLegacy
+                    ? '  <fg=green>✓</> Migrated the composer hook to post-autoload-dump (was post-package-update).'
+                    : '  <fg=green>✓</> Added the composer post-autoload-dump hook to composer.json (runs redline:update automatically).'));
         } else {
-            $this->line('  <fg=yellow>⚠</> Could not add the composer post-package-update hook to composer.json.');
+            $this->line('  <fg=yellow>⚠</> Could not add the composer post-autoload-dump hook to composer.json.');
             $this->line('  `redline:update` will offer to add it later.');
         }
 
         $this->line('');
+    }
+
+    /**
+     * Record the version the composer post-autoload-dump hook (ComposerHook)
+     * compares against, so the next composer run stays silent. Best effort: a
+     * marker write must never fail the install.
+     */
+    private function markCurrent(): void
+    {
+        try {
+            UpdateMarker::mark(UpdateMarker::currentVersionKey());
+        } catch (Throwable) {
+            // a marker write must never fail the install
+        }
     }
 
     /**

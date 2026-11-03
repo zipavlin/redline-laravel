@@ -162,7 +162,7 @@ it('removes storage, published files and REDLINE_* env entries with --force', fu
     expect($remaining)->toContain("MAIL_MAILER=resend\nRESEND_API_KEY=re_abc");
 });
 
-it('removes only the Redline composer post-package-update hook', function () {
+it('removes only the Redline composer hook entries', function () {
     $fs = app('files');
     $envPath = removeTestEnvPath('composer-hook');
     $composerPath = removeTestComposerPath('composer-hook');
@@ -172,14 +172,14 @@ it('removes only the Redline composer post-package-update hook', function () {
         'name' => 'acme/app',
         'require' => ['php' => '^8.3'],
         'scripts' => [
-            'post-autoload-dump' => ['@php artisan package:discover --ansi'],
+            'post-autoload-dump' => ['@php artisan package:discover --ansi', ComposerScripts::AUTOLOAD_HOOK],
             'post-package-update' => ['Acme\\Pkg\\Hook::run', ComposerScripts::UPDATE_HOOK],
         ],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
     $this->artisan('redline:remove', ['--force' => true])
         ->assertExitCode(0)
-        ->expectsOutputToContain('Composer post-package-update hook removed from composer.json.');
+        ->expectsOutputToContain('Composer hook removed from composer.json.');
 
     $decoded = json_decode((string) file_get_contents($composerPath), true);
 

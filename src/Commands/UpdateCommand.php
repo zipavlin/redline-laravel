@@ -10,6 +10,7 @@ use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Providers\Storage\StorageProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
 use Zipavlin\Redline\Support\ComposerScripts;
+use Zipavlin\Redline\Support\UpdateMarker;
 
 class UpdateCommand extends Command
 {
@@ -62,6 +63,7 @@ class UpdateCommand extends Command
             $this->republishMailViews(),
         ]));
         $this->clearCaches();
+        $this->markCurrent();
         $this->handleComposerHook();
         $this->summarize($version, $pending, $untouched);
 
@@ -111,13 +113,14 @@ class UpdateCommand extends Command
     }
 
     /**
-     * The install hint is printed on its own line so a long database path can
-     * never word-wrap the command name in two.
+     * The exact hint the composer hook relies on appearing in its streamed
+     * output: one plain first line so a long database reason can never
+     * word-wrap the command name, then the detail as a muted second line.
      */
     private function reportNotInstalled(string $detail): void
     {
-        $this->error('  Redline is not installed - '.$detail.'.');
-        $this->line('  Run `php artisan redline:install` first.');
+        $this->error('  Redline is not installed - run php artisan redline:install to set up Redline.');
+        $this->line('  <fg=gray>'.$detail.'</>');
     }
 
     /**
@@ -224,10 +227,16 @@ class UpdateCommand extends Command
             $this->line('   - Published mail views detected (would offer to re-publish).');
         }
 
-        if ((new ComposerScripts($this->composerJsonPath()))->hasUpdateHook()) {
-            $this->line('   - The composer post-package-update hook is present.');
+        $scripts = new ComposerScripts($this->composerJsonPath());
+
+        if ($scripts->hasAutoloadHook() && ! $scripts->hasUpdateHook()) {
+            $this->line('   - The composer post-autoload-dump hook is present.');
+        } elseif ($scripts->hasAutoloadHook()) {
+            $this->line('   - The composer post-autoload-dump hook is present (a legacy post-package-update entry would be removed).');
+        } elseif ($scripts->hasUpdateHook()) {
+            $this->line('   - A legacy composer post-package-update hook is present (would migrate it to post-autoload-dump).');
         } else {
-            $this->line('   - The composer post-package-update hook is missing (would offer to add it).');
+            $this->line('   - The composer post-autoload-dump hook is missing (would offer to add it).');
         }
 
         $this->line('');
@@ -395,40 +404,55 @@ class UpdateCommand extends Command
     }
 
     /**
-     * Offer the composer `post-package-update` hook so future `composer update`
-     * runs apply Redline updates automatically (see ComposerHook). Accepted by
-     * default because it only affects later updates; never written under
-     * --force, mirroring republishConfig()/republishMailViews().
+     * Move the composer hook to `post-autoload-dump` so future composer runs
+     * apply Redline updates automatically (see ComposerHook). Under --force
+     * (unattended, composer-spawned runs) the migration applies silently;
+     * otherwise it is confirmed like the other re-publish offers.
      */
     private function handleComposerHook(): void
     {
         $scripts = new ComposerScripts($this->composerJsonPath());
+        $hadLegacy = $scripts->hasUpdateHook();
+        $hadAutoload = $scripts->hasAutoloadHook();
 
-        if ($scripts->hasUpdateHook()) {
-            $this->line('  <fg=yellow>•</> Composer post-package-update hook already present.');
-
-            return;
-        }
-
-        if ($this->option('force')) {
-            $this->line('  <fg=yellow>•</> --force: skipped the composer post-package-update hook.');
+        if ($hadAutoload && ! $hadLegacy) {
+            $this->line('  <fg=yellow>•</> Composer post-autoload-dump hook already present.');
 
             return;
         }
 
-        if (! $this->confirm('Set up Redline to update automatically on package updates? (composer post-package-update hook)', true)) {
+        if (! $this->option('force')
+            && ! $this->confirm('Set up Redline to update automatically on composer runs? (composer post-autoload-dump hook)', true)) {
             $this->line('  <fg=yellow>•</> Skipped - re-run `php artisan redline:update` to add it.');
 
             return;
         }
 
-        if ($scripts->addUpdateHook()) {
-            $this->line('  <fg=green>✓</> Added the composer post-package-update hook.');
+        if ($scripts->migrateHooks()) {
+            $this->line(match (true) {
+                $hadLegacy && $hadAutoload => '  <fg=green>✓</> Removed the legacy composer post-package-update hook (post-autoload-dump hook already present).',
+                $hadLegacy => '  <fg=green>✓</> Migrated the composer hook to post-autoload-dump (was post-package-update).',
+                default => '  <fg=green>✓</> Added the composer post-autoload-dump hook.',
+            });
 
             return;
         }
 
-        $this->warn('  <fg=yellow>⚠</> Could not write the composer post-package-update hook to composer.json.');
+        $this->warn('  <fg=yellow>⚠</> Could not add the composer post-autoload-dump hook to composer.json.');
+    }
+
+    /**
+     * Record the version the composer post-autoload-dump hook (ComposerHook)
+     * compares against, so the next composer run stays silent. Best effort: an
+     * update must never fail over a marker write.
+     */
+    private function markCurrent(): void
+    {
+        try {
+            UpdateMarker::mark(UpdateMarker::currentVersionKey());
+        } catch (Throwable) {
+            // a marker write must never fail the update
+        }
     }
 
     /**

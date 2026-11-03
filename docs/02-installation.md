@@ -79,12 +79,13 @@ Check detailed information about each step in [08-commands.md](08-commands.md#re
    - *"Publish Redline config? This is not needed - you can set Redline in .env"* (default: **No**) - runs `vendor:publish --tag=redline-config`, overwriting only after a second confirmation if `config/redline.php` already exists.
    - *"Publish Redline assets to public/vendor/redline/?"* (default: **Yes**) - runs `vendor:publish --tag=redline-assets`.
 
-7. **Composer updates** - no prompt. The installer adds the `post-package-update` script
-   `Zipavlin\Redline\ComposerHook::postPackageUpdate` to your `composer.json`, so a later
-   `composer update` runs `php artisan redline:update --force` automatically (see
-   [Updating](#updating)). A hook that is already there is reported and left alone; if
-   `composer.json` is missing or unreadable the installer only warns - `redline:update`
-   offers to add it later.
+7. **Composer updates** - no prompt. The installer adds the `post-autoload-dump` script
+   `Zipavlin\Redline\ComposerHook::ensureCurrent` to your `composer.json`, so a later
+   composer run runs `php artisan redline:update --force` automatically when the installed
+   version differs from the marker file (see [Updating](#updating)). A hook that is already
+   there is reported and left alone; a legacy `post-package-update` entry is replaced in the
+   same write. If `composer.json` is missing or unreadable the installer only warns -
+   `redline:update` offers to migrate it later.
 
 8. **First admin user** - *"Would you like to create the first admin user?"* (default: **Yes**) - runs `php artisan redline:user` (password minimum 6 characters).
 
@@ -139,47 +140,54 @@ The command verifies the install (on a fresh host it points you at
 `redline:install` instead - an update never creates the database), reports
 and runs only the pending package migrations with a pre-migration SQLite
 backup, re-publishes assets with `--force`, offers to re-publish a published
-config or mail views (never overwritten under `--force`), offers to register
-the composer `post-package-update` hook, and clears the config/view/route
-caches. It is idempotent and safe to re-run. Flags:
+config or mail views (never overwritten under `--force`), migrates the
+composer hook to `post-autoload-dump` (silently under `--force`), and clears
+the config/view/route caches. It is idempotent and safe to re-run. Flags:
 `--force` (`-F`) for deploy scripts, `--dry-run` to preview,
 `--no-backup` to skip the backup. Full details in
 [08-commands.md](08-commands.md#redlineupdate).
 
 ### Automatic updates via composer
 
-`redline:install` writes a `post-package-update` script into the host's
+`redline:install` writes a `post-autoload-dump` script into the host's
 `composer.json`:
 
 ```json
 "scripts": {
-    "post-package-update": [
-        "Zipavlin\\Redline\\ComposerHook::postPackageUpdate"
+    "post-autoload-dump": [
+        "Zipavlin\\Redline\\ComposerHook::ensureCurrent"
     ]
 }
 ```
 
-Composer runs it after every package update; when the updated package is
-Redline itself, the hook shells out to `php artisan redline:update --force` in a
-fresh process, so the new migrations and assets are applied without a manual
-step. The hook never fails the `composer update` - a failed artisan run is
-reported on stderr and left for you to re-run by hand.
+Composer runs it after every composer run (a `composer update`, a plain
+`composer dump-autoload`, ...); the hook shows up once in composer's output
+instead of once per updated package, and it shells out to
+`php artisan redline:update --force` in a fresh process only when the installed
+package version differs from the marker file written after the last successful
+install/update. A missing marker counts as drift, so the first composer run
+after an install or a package bump brings the schema and assets current and the
+hook stays silent afterwards. The spawned output streams live (migrations,
+assets, caches) and the hook never fails the composer command - a failed
+artisan run is reported on stderr and left for you to re-run by hand.
 
-`composer require zipavlin/redline` fires `post-package-install`, **not**
-`post-package-update`, so the hook deliberately does nothing on the first
-install - `php artisan redline:install` owns the initial setup and adds the hook
-afterwards.
+When Redline is not installed yet (a plain `composer require
+zipavlin/redline` before the installer ran), the spawned `redline:update`
+prints `Redline is not installed - run php artisan redline:install to set up
+Redline.` instead of failing - `php artisan redline:install` owns the initial
+setup and writes the marker afterwards.
 
 > Adding or removing the entry re-encodes your whole `composer.json` in
 > Composer's own pretty format: indentation (4 spaces), spacing and the trailing
 > newline are normalized, while key order and every value are preserved.
 
-- **Pre-existing installs** - `redline:update` offers to add the hook (default
-  **Yes**); answering no just leaves it for a later run.
+- **Pre-existing installs** - `redline:update` offers to migrate the legacy
+  `post-package-update` entry to `post-autoload-dump` (default **Yes**; applied silently
+  under `--force`); answering no just leaves it for a later run.
 - **Opting out of execution** - set `REDLINE_SKIP_UPDATE_HOOK=true`
   (see [Configuration](03-configuration.md)) to keep the entry but skip the run.
-- **Removal** - `redline:remove` deletes only the Redline entry, leaving any
-  other `post-package-update` listener intact.
+- **Removal** - `redline:remove` deletes only the Redline entries (both the legacy
+  and the per-run one), leaving any other listener intact.
 
 ## Uninstalling
 
@@ -192,7 +200,7 @@ php artisan redline:remove
 1. **Removes storage** - deletes `storage/app/redline/` (refuses to delete anything outside `storage/app`).
 2. **Removes published assets** - `public/vendor/redline/`.
 3. **Removes published config and mail views** - `config/redline.php` and `resources/views/vendor/redline/`.
-4. **Removes the composer hook** - drops only the Redline `post-package-update` entry from `composer.json` (any other listener survives); a missing or unreadable `composer.json` only warns.
+4. **Removes the composer hook** - drops only the Redline `post-package-update` and `post-autoload-dump` entries from `composer.json` (any other listener survives); a missing or unreadable `composer.json` only warns.
 5. **Strips `REDLINE_*` entries** from `.env`.
 6. **Scans for manual clean-ups** - searches your project's `*.php` files (excluding `vendor`, `node_modules`, `storage`, `bootstrap/cache`) for `ShowRedlineWidget`, `Zipavlin\Redline` and `RedlineServiceProvider` references and lists each match for you to remove by hand (e.g. a manually registered provider in `bootstrap/providers.php`).
 7. **Optionally removes the package** - asks whether to run `composer remove zipavlin/redline`; with `--force` the prompt is skipped and the package is removed automatically. If the automatic removal fails it prints the manual `composer remove` command.

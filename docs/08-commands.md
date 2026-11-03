@@ -132,17 +132,17 @@ Publish Redline assets to public/vendor/redline/? [yes]
 
 ### Step 7 - Composer updates
 
-No prompt. The installer writes the `post-package-update` hook into the host's
-`composer.json`:
+No prompt. The installer writes the `post-autoload-dump` hook into the host's
+`composer.json` - a legacy `post-package-update` entry is replaced in the same write:
 
 ```
 Composer updates
-✓ Added the composer post-package-update hook to composer.json (runs redline:update automatically).
+✓ Added the composer post-autoload-dump hook to composer.json (runs redline:update automatically).
 ```
 
-An already-present hook prints `• Composer post-package-update hook already present in
+An already-present hook prints `• Composer post-autoload-dump hook already present in
 composer.json.` and changes nothing. A missing or unreadable `composer.json` only warns (the
-install still succeeds) - `redline:update` offers to add the hook later. See
+install still succeeds) - `redline:update` offers to migrate the hook later. See
 [Installation](02-installation.md#automatic-updates-via-composer).
 
 ### Step 8 - First admin user
@@ -179,7 +179,7 @@ Next steps:
 | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | Resend or SMTP chosen | Mail transport |
 | `RESEND_API_KEY` | Resend chosen, key given | Resend API key |
 
-It also publishes the selected config/assets, adds the composer `post-package-update` hook
+It also publishes the selected config/assets, adds the composer `post-autoload-dump` hook
 to `composer.json`, and creates the Redline SQLite schema on the `redline` connection.
 
 ## redline:enable
@@ -308,22 +308,23 @@ php artisan redline:update --no-backup  # skip the pre-migration SQLite backup
    exists: offers to re-publish (default No; never clobbered under `--force`).
 8. **Clear caches** - runs `config:clear`, `view:clear`, `route:clear`, since
    stale caches can pin the previous version after a composer update.
-9. **Composer hook** - when `composer.json` already carries the Redline
-   `post-package-update` entry it says so and skips; under `--force` it prints
-   `--force: skipped the composer post-package-update hook.` and writes nothing;
-   otherwise it asks
-   `Set up Redline to update automatically on package updates? (composer
-   post-package-update hook)` (default **Yes**) and appends the entry, so later
-   `composer update` runs are automatic. An unwritable or invalid `composer.json`
-   only warns - the upgrade still succeeds.
+9. **Composer hook** - when `composer.json` already carries the per-run
+   `post-autoload-dump` entry (and no legacy Redline one) it says so and skips.
+   Under `--force` the migration applies silently; otherwise it asks
+   `Set up Redline to update automatically on composer runs? (composer
+   post-autoload-dump hook)` (default **Yes**) and migrates: the legacy Redline
+   `post-package-update` entry is dropped, the `post-autoload-dump` entry is
+   added, and foreign listeners stay untouched, so later composer runs are
+   automatic. An unwritable or invalid `composer.json` only warns - the upgrade
+   still succeeds.
 10. **Summary** - version, migration count, and asset re-publish, plus a
     `Left untouched: …` line naming any published config/mail views that were
     left in place (omitted when there were none, or when they were re-published).
 
 With `--dry-run` the command stops after step 2 and prints the planned steps
 instead (pending-migration count, asset target, whether published config or
-mail views would trigger an offer, whether the composer hook is missing) - it
-mutates nothing.
+mail views would trigger an offer, whether the composer hook is missing or
+still the legacy entry) - it mutates nothing.
 
 ## redline:user
 
@@ -435,9 +436,9 @@ Please write 'staging' to continue:
 2. **Assets** - the published `public/vendor/redline` directory.
 3. **Config** - `config/redline.php` and any published mail views under
    `resources/views/vendor/redline`.
-4. **Composer hook** - drops only the Redline `post-package-update` entry from
-   `composer.json`, leaving any other listener and every other key intact. No hook (or an
-   unreadable `composer.json`) prints a note and continues.
+4. **Composer hook** - drops the Redline `post-package-update` and
+   `post-autoload-dump` entries from `composer.json`, leaving any other listener and every
+   other key intact. No hook (or an unreadable `composer.json`) prints a note and continues.
 5. **`.env` entries** - every line whose key starts with `REDLINE_` is stripped (other lines,
    including any `MAIL_*` keys the installer wrote, are left byte-for-byte intact).
 
@@ -469,8 +470,8 @@ by hand. With `--force`, this prompt is skipped and the package is removed autom
 
 | Command | Purpose | Flags |
 |---|---|---|
-| `redline:install` | Interactive setup: storage, auth, guard, features, email; writes `.env`, publishes config/assets, adds the composer `post-package-update` hook, creates DB schema, first admin; prints the MCP token/endpoint hints when `mcp` was selected | - |
-| `redline:update` (alias `redline:upgrade`) | Upgrade an existing install: preflight check, pending migrations (+ SQLite backup), assets re-published with `--force`, optional config/mail re-publish, composer hook offer, cache clears; prints the current feature state | `-F`, `--force` - non-interactive; published config/mail views and the composer hook left untouched; `--dry-run` - report only; `--no-backup` - skip backup |
+| `redline:install` | Interactive setup: storage, auth, guard, features, email; writes `.env`, publishes config/assets, adds the composer `post-autoload-dump` hook, creates DB schema, first admin; prints the MCP token/endpoint hints when `mcp` was selected | - |
+| `redline:update` (alias `redline:upgrade`) | Upgrade an existing install: preflight check, pending migrations (+ SQLite backup), assets re-published with `--force`, optional config/mail re-publish, composer hook migration, cache clears; prints the current feature state | `-F`, `--force` - non-interactive (the composer hook migrates silently); published config/mail views left untouched; `--dry-run` - report only; `--no-backup` - skip backup |
 | `redline:enable` | List every feature + state; enable/disable by name in fixed enum order; writes `REDLINE_FEATURES` (key kept even when all off); unknown name exits 1 writing nothing | `feature*` (positional, comma/space separated); `-D`, `--disable=*` |
 | `redline:user` | Create/edit/promote a user directly in storage; bypasses auth-provider policies (password min 6) | `--promote`, `--edit` (mutually exclusive) |
 | `redline:mcp` | Interactive MCP-token wizard plus create/list/revoke (`redline_tokens`); refuses pending/guest owners; plaintext shown once; roster carries a 4-char identification hint | bare = wizard, `--name=`, `--user=`, `--list`, `--revoke={id}`, `--revoke-all` (needs `--user=`) |

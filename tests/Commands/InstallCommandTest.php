@@ -268,7 +268,7 @@ it('prints the composer warning and continues when the package install fails', f
     expect($command->composerInstalls)->toContain('resend/resend-php');
 });
 
-it('adds the composer post-package-update hook to composer.json', function () {
+it('adds the composer post-autoload-dump hook to composer.json', function () {
     $command = fakeInstallCommand();
 
     $this->artisan('redline:install')
@@ -279,19 +279,19 @@ it('adds the composer post-package-update hook to composer.json', function () {
         ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
         ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
         ->expectsConfirmation('Would you like to create the first admin user?', 'no')
-        ->expectsOutputToContain('Added the composer post-package-update hook to composer.json')
+        ->expectsOutputToContain('Added the composer post-autoload-dump hook to composer.json')
         ->assertExitCode(0);
 
     $decoded = json_decode((string) file_get_contents($command->composerJsonPath), true);
 
-    expect($decoded['scripts']['post-package-update'])->toBe([ComposerScripts::UPDATE_HOOK]);
+    expect($decoded['scripts']['post-autoload-dump'])->toBe([ComposerScripts::AUTOLOAD_HOOK]);
 });
 
-it('reports the composer post-package-update hook as already present', function () {
+it('reports the composer post-autoload-dump hook as already present', function () {
     $command = fakeInstallCommand();
 
     file_put_contents($command->composerJsonPath, (string) json_encode([
-        'scripts' => ['post-package-update' => [ComposerScripts::UPDATE_HOOK]],
+        'scripts' => ['post-autoload-dump' => [ComposerScripts::AUTOLOAD_HOOK]],
     ]));
 
     $this->artisan('redline:install')
@@ -302,6 +302,32 @@ it('reports the composer post-package-update hook as already present', function 
         ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
         ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
         ->expectsConfirmation('Would you like to create the first admin user?', 'no')
-        ->expectsOutputToContain('Composer post-package-update hook already present in composer.json.')
+        ->expectsOutputToContain('Composer post-autoload-dump hook already present in composer.json.')
         ->assertExitCode(0);
+});
+
+it('migrates a legacy composer post-package-update entry to post-autoload-dump', function () {
+    $command = fakeInstallCommand();
+
+    file_put_contents($command->composerJsonPath, (string) json_encode([
+        'name' => 'acme/app',
+        'scripts' => ['post-package-update' => ['Acme\\Pkg\\Hook::run', ComposerScripts::UPDATE_HOOK]],
+    ], JSON_PRETTY_PRINT));
+
+    $this->artisan('redline:install')
+        ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
+        ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
+        ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
+        ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
+        ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
+        ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
+        ->expectsConfirmation('Would you like to create the first admin user?', 'no')
+        ->expectsOutputToContain('Migrated the composer hook to post-autoload-dump (was post-package-update).')
+        ->assertExitCode(0);
+
+    $decoded = json_decode((string) file_get_contents($command->composerJsonPath), true);
+
+    expect($decoded['scripts']['post-autoload-dump'])->toBe([ComposerScripts::AUTOLOAD_HOOK]);
+    expect($decoded['scripts']['post-package-update'])->toBe(['Acme\\Pkg\\Hook::run']);
+    expect($decoded['name'])->toBe('acme/app');
 });

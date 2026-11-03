@@ -141,28 +141,34 @@ class RemoveCommand extends Command
     }
 
     /**
-     * Drop the composer `post-package-update` hook. Runs before removePackage()
-     * on purpose: `composer remove zipavlin/redline` rewrites composer.json and
-     * would drop the entry with the rest of the package anyway. Failures only
-     * warn - removal must always complete.
+     * Drop the composer hook entries: the legacy `post-package-update` one and
+     * the per-run `post-autoload-dump` one. Runs before removePackage() on
+     * purpose: `composer remove zipavlin/redline` rewrites composer.json and
+     * would drop the entries with the rest of the package anyway. Failures
+     * only warn - removal must always complete.
      */
     protected function removeComposerHook(): void
     {
         $this->info('Removing composer hook');
 
         if (! is_file($this->composerJsonPath())) {
-            $this->line('  <fg=yellow>⚠</> No composer.json found - skipping the post-package-update hook.');
+            $this->line('  <fg=yellow>⚠</> No composer.json found - skipping the composer hook.');
 
             return;
         }
 
-        if ((new ComposerScripts($this->composerJsonPath()))->removeUpdateHook()) {
-            $this->line('  <fg=green>✓</> Composer post-package-update hook removed from composer.json.');
+        $scripts = new ComposerScripts($this->composerJsonPath());
+
+        $removed = $scripts->removeUpdateHook();
+        $removed = $scripts->removeAutoloadHook() || $removed;
+
+        if ($removed) {
+            $this->line('  <fg=green>✓</> Composer hook removed from composer.json.');
 
             return;
         }
 
-        $this->line('  <fg=yellow>⚠</> No Redline composer post-package-update hook found in composer.json.');
+        $this->line('  <fg=yellow>⚠</> No Redline composer hook found in composer.json.');
     }
 
     protected function removeEnvEntries(): void

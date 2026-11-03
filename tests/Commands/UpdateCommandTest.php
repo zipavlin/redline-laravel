@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Zipavlin\Redline\Commands\UpdateCommand;
 use Zipavlin\Redline\Support\ComposerScripts;
+use Zipavlin\Redline\Support\UpdateMarker;
 
 /**
  * redline:update upgrades an already-installed Redline: it runs only the package
@@ -30,6 +31,14 @@ afterEach(function () {
     }
 
     cleanComposerJsonFixtures();
+    @unlink(UpdateMarker::path());
+});
+
+beforeEach(function () {
+    // Every update test - even the bare ones - writes the composer hook
+    // through a throwaway fixture under --force, so the framework skeleton's
+    // own composer.json is never rewritten and tests stay order-independent.
+    fakeUpdateCommand(composerJsonFixture('{}'));
 });
 
 /**
@@ -103,9 +112,11 @@ it('mutates nothing in dry-run mode', function () {
 it('fails the preflight with an install hint when redline is not installed', function () {
     Schema::connection('redline')->drop('redline_reports');
 
+    // One toContain per console line: the harness matches each expectation
+    // against a separate doWrite call, and the two substrings share one line.
     $this->artisan('redline:update --force')
-        ->expectsOutputToContain('Redline is not installed')
-        ->expectsOutputToContain('redline:install')
+        ->expectsOutputToContain('Redline is not installed - run php artisan redline:install to set up Redline.')
+        ->expectsOutputToContain('redline_reports table not found')
         ->assertExitCode(1);
 });
 
@@ -147,7 +158,7 @@ it('leaves a published config alone when the re-publish prompt is declined', fun
 
     $this->artisan('redline:update')
         ->expectsConfirmation('Re-publish config/redline.php? This overwrites your edits.', 'no')
-        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'no')
+        ->expectsConfirmation('Set up Redline to update automatically on composer runs? (composer post-autoload-dump hook)', 'no')
         ->assertExitCode(0);
 
     expect(file_get_contents($path))->toContain('host-customised');
@@ -159,7 +170,7 @@ it('overwrites a published config when the re-publish prompt is answered yes', f
 
     $this->artisan('redline:update')
         ->expectsConfirmation('Re-publish config/redline.php? This overwrites your edits.', 'yes')
-        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'no')
+        ->expectsConfirmation('Set up Redline to update automatically on composer runs? (composer post-autoload-dump hook)', 'no')
         ->assertExitCode(0);
 
     expect(file_get_contents($path))->not->toContain('host-customised');
@@ -182,7 +193,7 @@ it('overwrites a published mail view when the re-publish prompt is answered yes'
 
     $this->artisan('redline:update')
         ->expectsConfirmation('Re-publish mail views? This overwrites your edits.', 'yes')
-        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'no')
+        ->expectsConfirmation('Set up Redline to update automatically on composer runs? (composer post-autoload-dump hook)', 'no')
         ->assertExitCode(0);
 
     $source = dirname(__DIR__, 2).'/resources/views/mail/new-report.blade.php';
@@ -214,56 +225,58 @@ it('keeps two backups made within the same second from colliding', function () {
     }
 });
 
-it('adds the composer hook when the update prompt is answered yes', function () {
+it('migrates the composer hook when the update prompt is answered yes', function () {
     $command = fakeUpdateCommand(composerJsonFixture('{}'));
 
     $this->artisan('redline:update')
-        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'yes')
-        ->expectsOutputToContain('Added the composer post-package-update hook.')
+        ->expectsConfirmation('Set up Redline to update automatically on composer runs? (composer post-autoload-dump hook)', 'yes')
+        ->expectsOutputToContain('Added the composer post-autoload-dump hook.')
         ->assertExitCode(0);
 
     $decoded = json_decode((string) file_get_contents($command->composerJsonPath), true);
 
-    expect($decoded['scripts']['post-package-update'])->toBe([ComposerScripts::UPDATE_HOOK]);
+    expect($decoded['scripts']['post-autoload-dump'])->toBe([ComposerScripts::AUTOLOAD_HOOK]);
 });
 
 it('leaves composer.json alone when the update prompt is declined', function () {
     $command = fakeUpdateCommand(composerJsonFixture('{}'));
 
     $this->artisan('redline:update')
-        ->expectsConfirmation('Set up Redline to update automatically on package updates? (composer post-package-update hook)', 'no')
+        ->expectsConfirmation('Set up Redline to update automatically on composer runs? (composer post-autoload-dump hook)', 'no')
         ->expectsOutputToContain('re-run `php artisan redline:update` to add it')
         ->assertExitCode(0);
 
     expect(file_get_contents($command->composerJsonPath))->toBe('{}');
 });
 
-it('leaves composer.json alone under --force and reports the skip', function () {
+it('migrates the composer hook silently under --force', function () {
     $command = fakeUpdateCommand(composerJsonFixture('{}'));
 
     $this->artisan('redline:update --force')
-        ->expectsOutputToContain('--force: skipped the composer post-package-update hook')
+        ->expectsOutputToContain('Added the composer post-autoload-dump hook.')
         ->assertExitCode(0);
 
-    expect(file_get_contents($command->composerJsonPath))->toBe('{}');
+    $decoded = json_decode((string) file_get_contents($command->composerJsonPath), true);
+
+    expect($decoded['scripts']['post-autoload-dump'])->toBe([ComposerScripts::AUTOLOAD_HOOK]);
 });
 
-it('reports the composer hook as already present without prompting', function () {
+it('reports the composer post-autoload-dump hook as already present without prompting', function () {
     $command = fakeUpdateCommand(composerJsonFixture((string) json_encode([
-        'scripts' => ['post-package-update' => [ComposerScripts::UPDATE_HOOK]],
+        'scripts' => ['post-autoload-dump' => [ComposerScripts::AUTOLOAD_HOOK]],
     ], JSON_PRETTY_PRINT)));
 
     $this->artisan('redline:update')
-        ->expectsOutputToContain('Composer post-package-update hook already present.')
-        ->doesntExpectOutputToContain('Set up Redline to update automatically on package updates?')
+        ->expectsOutputToContain('Composer post-autoload-dump hook already present.')
+        ->doesntExpectOutputToContain('Set up Redline to update automatically on composer runs?')
         ->assertExitCode(0);
 
-    expect(file_get_contents($command->composerJsonPath))->toContain('ComposerHook::postPackageUpdate');
+    expect(file_get_contents($command->composerJsonPath))->toContain('ComposerHook::ensureCurrent');
 });
 
 it('reports the missing composer hook in dry-run mode', function () {
     $this->artisan('redline:update --dry-run')
-        ->expectsOutputToContain('The composer post-package-update hook is missing')
+        ->expectsOutputToContain('The composer post-autoload-dump hook is missing')
         ->assertExitCode(0);
 });
 
@@ -303,4 +316,37 @@ it('stops a host behind HTTP Basic Auth off when mcp is off, points it at docs/1
     $this->artisan('redline:update --force')
         ->doesntExpectOutputToContain('docs/12-mcp.md')
         ->assertExitCode(0);
+});
+
+it('migrates a legacy post-package-update entry for pre-existing hosts', function () {
+    $command = fakeUpdateCommand(composerJsonFixture((string) json_encode([
+        'name' => 'acme/app',
+        'scripts' => [
+            'post-package-update' => ['Acme\\Pkg\\Hook::run', ComposerScripts::UPDATE_HOOK],
+        ],
+    ], JSON_PRETTY_PRINT)));
+
+    $this->artisan('redline:update')
+        ->expectsConfirmation('Set up Redline to update automatically on composer runs? (composer post-autoload-dump hook)', 'yes')
+        ->expectsOutputToContain('Migrated the composer hook to post-autoload-dump (was post-package-update).')
+        ->assertExitCode(0);
+
+    $decoded = json_decode((string) file_get_contents($command->composerJsonPath), true);
+
+    expect($decoded['name'])->toBe('acme/app');
+    expect($decoded['scripts']['post-autoload-dump'])->toBe([ComposerScripts::AUTOLOAD_HOOK]);
+    expect($decoded['scripts']['post-package-update'])->toBe(['Acme\\Pkg\\Hook::run']);
+});
+
+it('writes the version marker, so the composer post-autoload-dump hook stays silent afterwards', function () {
+    $marker = UpdateMarker::path();
+    @unlink($marker);
+    expect($marker)->not->toBeFile();
+
+    $this->artisan('redline:update --force')->assertExitCode(0);
+
+    $decoded = json_decode((string) file_get_contents($marker), true);
+
+    expect($decoded['version'])->toBe(UpdateMarker::currentVersionKey());
+    expect($marker)->toBeFile();
 });

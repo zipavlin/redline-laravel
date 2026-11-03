@@ -51,8 +51,10 @@ is already configured (the test suite injects `:memory:` this way).
   pending package migrations (with a pre-migration SQLite backup), then
   re-publishes assets and clears stale caches - see
   [Commands](08-commands.md#redlineupdate). The installer registers
-  `redline:update` as a composer `post-package-update` listener, so a plain
-  `composer update` runs it automatically (`REDLINE_SKIP_UPDATE_HOOK` opts out).
+  `redline:update` as a composer `post-autoload-dump` listener, so a plain
+  composer run executes it automatically - exactly once per run, only when the
+  installed version drifted from the marker file
+  (`REDLINE_SKIP_UPDATE_HOOK` opts out).
 - **A stale-but-installed database boots.** Since boot checks only the base table,
   an install predating a later migration - a missing `redline_members` table, a
   missing `priority` or `due_at` column - no longer throws at boot. Keeping the
