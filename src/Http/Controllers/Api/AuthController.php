@@ -170,6 +170,35 @@ class AuthController extends Controller
     }
 
     /**
+     * PATCH /redline/api/auth/me (protected)
+     *
+     * Self-service preference update. Deliberately whitelist-only: the body may
+     * carry nothing but `notify_new_reports`, so this endpoint can never become
+     * a self-service path to name/email/role changes (those stay admin-only via
+     * PATCH /user/{user}).
+     */
+    public function updateMe(Request $request): JsonResponse
+    {
+        $unknown = array_diff(array_keys($request->all()), ['notify_new_reports']);
+        if ($unknown !== []) {
+            return $this->error(['Only notify_new_reports may be updated here.'], 422);
+        }
+
+        $data = $request->validate([
+            'notify_new_reports' => ['required', 'boolean'],
+        ]);
+
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return $this->error(['Unauthenticated.'], 403, error: Unauthenticated::MARKER);
+        }
+
+        $user->update($data);
+
+        return response()->json(['user' => $user->fresh()->toArray()]);
+    }
+
+    /**
      * GET /redline/api/auth/refresh (protected)
      */
     public function refresh(Request $request): JsonResponse

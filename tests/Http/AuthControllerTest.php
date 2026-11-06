@@ -396,3 +396,49 @@ it('never includes the password in any response', function () {
 
     expect($body)->not->toContain('super-secret-pw');
 });
+
+// ---------------------------------------------------------------------------
+// PATCH /auth/me - self-service notification preference
+// ---------------------------------------------------------------------------
+
+it('lets a user update their own notification preference via PATCH /auth/me', function () {
+    $user = makeUser('developer');
+    $headers = ['Authorization' => 'Bearer '.makeAuthToken($user)];
+
+    $body = $this->patchJson('/redline/api/auth/me', ['notify_new_reports' => false], $headers)
+        ->assertStatus(200)
+        ->json();
+
+    expect($body['user']['notify_new_reports'])->toBeFalse()
+        ->and(app(User::class)->find($user['id'])->notify_new_reports)->toBeFalse();
+
+    // And back on.
+    $body = $this->patchJson('/redline/api/auth/me', ['notify_new_reports' => true], $headers)
+        ->assertStatus(200)
+        ->json();
+
+    expect($body['user']['notify_new_reports'])->toBeTrue();
+});
+
+it('rejects PATCH /auth/me with unknown or missing keys (whitelist-only body)', function () {
+    $user = makeUser('developer');
+    $headers = ['Authorization' => 'Bearer '.makeAuthToken($user)];
+
+    // A privilege-escalation attempt must never pass.
+    $this->patchJson('/redline/api/auth/me', ['role' => 'admin'], $headers)->assertStatus(422);
+    $this->patchJson('/redline/api/auth/me', ['notify_new_reports' => false, 'name' => 'Hacked'], $headers)->assertStatus(422);
+    $this->patchJson('/redline/api/auth/me', [], $headers)->assertStatus(422);
+    $this->patchJson('/redline/api/auth/me', ['notify_new_reports' => 'yes'], $headers)->assertStatus(422);
+
+    // Nothing was changed.
+    $fresh = app(User::class)->find($user['id']);
+    expect($fresh->role->value)->toBe('developer')
+        ->and($fresh->name)->toBe($user['name'])
+        ->and($fresh->notify_new_reports)->toBeTrue();
+});
+
+it('denies PATCH /auth/me without a token with 403 and the error marker', function () {
+    $this->patchJson('/redline/api/auth/me', ['notify_new_reports' => false])
+        ->assertStatus(403)
+        ->assertJson(['error' => 'unauthenticated']);
+});

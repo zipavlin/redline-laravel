@@ -64,6 +64,26 @@ it('notifies developers/admins when a report is filed', function () {
     Mail::assertSent(NewReportMail::class);
 });
 
+it('skips opted-out developers/admins but still emails the others', function () {
+    Mail::fake();
+    $optedOut = app(User::class)->create([
+        'name' => 'Opted Out', 'email' => 'opted-out@example.com',
+        'role' => 'admin', 'notify_new_reports' => false,
+    ]);
+    $receiving = app(User::class)->create([
+        'name' => 'Still On', 'email' => 'still-on@example.com',
+        'role' => 'developer', // default: notify_new_reports = true
+    ]);
+
+    $this->postJson('/redline/api/report', makeReportData(), authHeaders('reporter'))
+        ->assertStatus(201);
+
+    Mail::assertSent(NewReportMail::class, 1);
+    Mail::assertSent(NewReportMail::class, function (NewReportMail $mail) use ($optedOut, $receiving) {
+        return $mail->hasTo($receiving->email) && ! $mail->hasTo($optedOut->email);
+    });
+});
+
 it('emails a signed reset link on forgot-password (and stays uniform for unknown emails)', function () {
     Mail::fake();
     $user = makeUser('reporter');

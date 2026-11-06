@@ -33,6 +33,7 @@ class User extends Model
         'role',
         'password',
         'status',
+        'notify_new_reports',
     ];
 
     protected $hidden = [
@@ -43,6 +44,7 @@ class User extends Model
 
     protected $casts = [
         'role' => Role::class,
+        'notify_new_reports' => 'boolean',
     ];
 
     protected $appends = [

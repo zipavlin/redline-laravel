@@ -309,13 +309,15 @@ class ReportActions extends Action
 
     /**
      * Email developers/admins (except the reporter) that a new report was
-     * filed. No-op unless a mailer is configured; failures are swallowed (see
+     * filed. Users who opted out via their notify_new_reports preference are
+     * skipped. No-op unless a mailer is configured; failures are swallowed (see
      * RedlineServiceProvider::mail()).
      */
     private function notifyNewReport(Report $report, User $reporter): void
     {
         $recipients = app(User::class)
             ->whereIn('role', [Role::DEVELOPER->value, Role::ADMIN->value])
+            ->where('notify_new_reports', true)
             ->where('id', '!=', $reporter->id)
             ->pluck('email')
             ->filter()

@@ -68,6 +68,7 @@ Route::prefix(config('redline.path', 'redline').'/api')
 
             Route::delete('auth', [AuthController::class, 'logout']);
             Route::get('auth/me', [AuthController::class, 'me']);
+            Route::patch('auth/me', [AuthController::class, 'updateMe']);
             Route::get('auth/refresh', [AuthController::class, 'refresh']);
 
             // Users

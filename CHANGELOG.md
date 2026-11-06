@@ -1,3 +1,13 @@
+# v0.4.0 ()
+
+## Added
+
+- **Per-user opt-out of new-report emails** - developers and admins no longer
+  have to receive an email for every report filed. Each user can switch the
+  new-report notification off for themselves (default stays on, so existing
+  inboxes are unchanged). Opted-out users are simply skipped when a report
+  arrives; password-reset and other emails are not affected.
+
 # v0.3.1 (2026-11-02)
 
 ## Fixed
