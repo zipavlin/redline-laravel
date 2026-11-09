@@ -34,3 +34,4 @@ phpstan.neon
 /.openchamber
 /opencode.json
 /.cortexkit
+.gortex.yaml
