@@ -8,6 +8,17 @@
   inboxes are unchanged). Opted-out users are simply skipped when a report
   arrives; password-reset and other emails are not affected.
 
+## Changed
+
+- **Quieter, smarter composer auto-update** - the automatic `redline:update`
+  that keeps your install current now runs once per composer command instead
+  of once per updated package, and only actually fires when the installed
+  version has drifted from the last update (tracked by a marker file).
+  Migrations and asset publishing stream their progress live while running.
+  Existing installs are migrated automatically on the next
+  `redline:install` / `redline:update`; the old per-package hook keeps
+  working until then.
+
 # v0.3.1 (2026-11-02)
 
 ## Fixed
