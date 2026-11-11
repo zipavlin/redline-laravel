@@ -1,9 +1,43 @@
 # AGENTS.md - Redline (Laravel backend)
 
-Composer package **`zipavlin/redline`** (public repo `github.com/zipavlin/redline-laravel`) -
-the Laravel backend for Redline: a floating bug-reporting widget + review dashboard for
-staging environments. Not a standalone app; installs into a host Laravel app. Frontend
-source lives in the sibling **redline-app** repo (see "Related repositories").
+<!-- bmad:context -->
+<!-- Verified 2026-11-10 against 3402fde. Managed by bmad-project-context; edits inside this block are replaced on refresh. Keep anything you want preserved outside the markers. -->
+
+## redline-laravel
+
+Composer package `zipavlin/redline` — the Laravel backend for Redline: REST API, JWT-cookie auth, SQLite storage, MCP server. Not a standalone app; installs into a host Laravel app. Frontend sibling: `redline-app` (built bundles land in `public/`, published via `vendor:publish --tag=redline-assets`).
+
+## Policy
+
+- Route caching is supported: package routes register in the provider's `booted()` callback (console included), so a cache holds them; console-time route loading is unconditional.
+- The guard answers three different things: `isActive()` = is Redline active for this request; `shouldServeRoutes()` = the per-request middleware predicate (default `isActive()`, never consultable before the session stack — the api group nests that stack inside `RedlineActive`); `shouldLoadMiddleware()` = the boot-time wiring decision, which folds in `REDLINE_GUARD_EXCLUDE`. Default `EnvironmentGuardProvider` gates on `APP_ENV=staging`; `APP_DEBUG` does not gate it (see `tests/Guard/EnvironmentGuardProviderTest.php`).
+- MCP routes run `RedlineActive` → `RedlineMcpEnabled` ahead of laravel/mcp's own header middleware and the rate limiters and `RedlineApiAuth`; a guard-inactive host answers 404 on every shape (the POST server route and the vendor's GET/DELETE probes) with or without a route cache.
+
+## Where things are
+
+- Storage: a single `StorageProvider` (Eloquent + dedicated SQLite connection at `storage/app/redline/database/redline.db`). Requires `pdo_sqlite`. Migrations in `database/redline/` are numbered `0001_`–`0011_` (not timestamped; `0010` added `redline_tokens` + `redline_users.password_epoch`, `0011` the trailing user flag). File-DB boot verifies only the file and `redline_reports` exist — schema currency is `redline:install` / `redline:update`'s job; `ensureSchema()` never checks per-migration drift. In-memory test databases migrate automatically.
+- Query grammar: generic `filter[]/include[]/sort[]/paginate[]/aggregate[]/group_by[]` REST grammar in `src/Http/Query/`, entry point `ResourceQuery::from($model, $request)`; each model defines `querySchema()` (one example: `Report.members`, `filter[member:not]` negates the whole membership predicate; `filter[member.name:like]` is intentionally unsupported and 422s).
+- Members pivot: plain `belongsToMany` `redline_members` (`Report::members()` → `User`), composite PK `(report_id, user_id)`, real FKs with `CASCADE` — cleanup delegated to the database. `POST/DELETE /report/{report}/member` (body `{"user_ids": [...]}`) are `Operation::UPDATE`-gated (developer/admin/author; DELETE also an eligible non-guest member removing exactly themselves); both respond `{ "members": [...] }` through the shared `Support\Members::forReport()` projection so all surfaces stay consistent.
+- Mail views `resources/views/mail/`: `new-report`, `password-reset`, `user-invitation`, `verify`, `registration-approved`. `REDLINE_MAIL` kill switch; sends are best-effort and never fail a request.
+- Features: `REDLINE_FEATURES` comma-separated opt-in; an unknown value throws at boot; `redline:enable` lists/toggles.
+- Artisan commands (exactly six): `redline:install`, `redline:update` (alias `redline:upgrade`), `redline:enable`, `redline:user`, `redline:mcp`, `redline:remove`. No `redline:list`, no `redline:dev`.
+
+## Running and verifying
+
+- `vendor/bin/pint --dirty && composer test` (Pest). Single file: `vendor/bin/pest --filter=Report`. Last recorded full baseline: 698 passed / 2651 assertions — refresh from `composer test` after significant work.
+- `composer prepare` runs testbench package:discover (wired onto post-autoload-dump).
+
+## Conventions that differ from defaults
+
+- Auth tokens are delivered exclusively as an HttpOnly cookie `redline_token` — never in JSON bodies; state-changing cookie-authenticated requests echo the non-HttpOnly `redline_csrf` cookie in `X-Redline-CSRF` (Bearer-authenticated requests skip CSRF). Signing secret is HS256 over `config('app.key')`, decoded when `base64:`-prefixed; `token_version` bumps invalidate outstanding JWTs. Guest mode is config-gated per origin (`REDLINE_AUTH_GUEST`, `REDLINE_AUTH_GUEST_ORIGINS`, `REDLINE_AUTH_GUEST_THROTTLE`).
+- MCP API tokens are `rlm_` + 40 hex, sha-256-hashed in `redline_tokens`; issued only by `redline:mcp`; refused for pending/guest users; a token whose stored snapshot no longer matches is 401; cookie-source `rlm_` values are rejected outright.
+- Tests: each test gets a fresh in-memory SQLite database (Orchestra Testbench), `tests/TestCase.php` re-wires pluggable providers/views/storage, helpers in `tests/Pest.php`, `tests/ArchTest.php` bans `dd/dump/ray` globally.
+
+## Known pitfalls
+
+- Stored numbers (test counts, migration max) drift — re-check against disk before citing them.
+
+<!-- /bmad:context -->
 
 ## Activation model (do not oversimplify this)
 
@@ -78,13 +112,6 @@ composer prepare                 # testbench package:discover (also runs post-au
 vendor/bin/pint --dirty && composer test
 ```
 
-## Test status (current baseline)
-
-`vendor/bin/pest` reports **698 passed, 0 skipped (2651 assertions)** (one test fewer
-than the documented 699 baseline since the Pest 4.4.1 raise in `ea25a2a` dropped two
-laravel/mcp header assertions and added one back). The package has a
-single storage backend, so there are no environment-dependent skips.
-
 ## Architecture
 
 ### Storage - `src/Providers/Storage/`
@@ -95,7 +122,7 @@ config and no custom-provider seam.
 
 | Provider | Backing | Notes |
 |---|---|---|
-| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0009_`. **Not** auto-migrated at runtime: for a file database boot only verifies the file exists and `redline_reports` is present (a `RuntimeException` pointing at `php artisan redline:install` otherwise). It does **not** check per-migration drift - keeping an installed schema current is `redline:update`'s job, wired as a composer `post-package-update` listener (`Zipavlin\Redline\ComposerHook`, `REDLINE_SKIP_UPDATE_HOOK` opts out). In-memory test databases migrate automatically. |
+| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0011_`. **Not** auto-migrated at runtime: for a file database boot only verifies the file exists and `redline_reports` is present (a `RuntimeException` pointing at `php artisan redline:install` otherwise). It does **not** check per-migration drift - keeping an installed schema current is `redline:update`'s job, wired as a composer `post-package-update` listener (`Zipavlin\Redline\ComposerHook`, `REDLINE_SKIP_UPDATE_HOOK` opts out). In-memory test databases migrate automatically. |
 
 ### Query grammar - `src/Http/Query/`
 
@@ -220,7 +247,7 @@ supported (no `relatedSchema` on that filter) and 422s, as intended.
 - Mail: `REDLINE_MAIL` kill switch (default `true`); `mailConfigured()` is true only when
   the default mailer is a real transport (not `log`/`array`/`null`). Mail sends are
   best-effort and never fail a request. Views under `resources/views/mail/`:
-  `new-report`, `password-reset`, `user-invitation`, `verify`.
+  `new-report`, `password-reset`, `user-invitation`, `verify`, `registration-approved`.
 
 ### Bootstrap endpoint
 
@@ -307,36 +334,10 @@ type hint) because `composer/composer` is not installed here; it runs
 - PHP: PSR-4 `Zipavlin\Redline\` → `src/`; tests `Zipavlin\Redline\Tests\` → `tests/`.
 - Linting: Pint (Laravel defaults; no custom `pint.json`).
 - EditorConfig: LF line endings, 4-space indent, UTF-8.
-- Migrations numbered (`0001_`–`0009_`) in `database/redline/`, not timestamped; created
+- Migrations numbered (`0001_`-`0011_`) in `database/redline/`, not timestamped; created
   by `redline:install` for file databases, auto-run for in-memory test DBs. `ensureSchema()`
   never checks for per-migration drift - never add a per-migration guard there.
 - Built IIFE bundles in `public/` **are committed**.
 - Public assets tag: `php artisan vendor:publish --tag=redline-assets` (also
   `redline-config`, `redline-mail-views`).
 
-## Related repositories
-
-- **redline-app** (public, `github.com/zipavlin/redline-app`) - all frontend source
-  (widget + dashboard), Vue 3 + TS + Vite + Nuxt UI. Builds → `dist/`, handoff copies →
-  this repo's `public/`. Dev via `REDLINE_VITE_URL` (Vite :5173)
-
-## Code quality - clean-code-guard
-
-Any session that writes or edits code in this workspace - parent or child - runs a
-clean-code guard pass over its changes **before presenting, committing, or merging**.
-
-- **Condensed checklist (always applies):**
-    - Names reveal intent - no `data`, `result`, `item`, `temp`, `utils`, `handle_*`.
-    - Functions ≤ 20 lines, ≤ 4 params, one thing; no boolean-flag args; no output args
-      (command/query separation).
-    - Comments explain *why*, never *what*; no commented-out code; match neighbor style.
-    - Catch only errors you can recover from; never swallow into silent null/empty success.
-    - Validate at trust boundaries (external input, request payloads); no defensive checks
-      inside the boundary.
-    - No speculative abstractions, config flags, or dead code (YAGNI); strip unused
-      imports/symbols before delivery.
-    - No hardcoded "ok"/fixture returns in production code; never weaken a test to pass.
-    - Verify library APIs against the installed version before calling; read the file you
-      edit and one neighbor first.
-    - No new dependency where the stdlib, installed packages, or a few lines suffice.
-    - Refactors preserve observable behavior; bug fixes are separate, flagged changes.
