@@ -107,7 +107,7 @@ class InstallCommand extends Command
         )));
 
         foreach (['redline-config', 'redline-assets'] as $tag) {
-            if ($this->callQuietly('vendor:publish', ['--tag' => $tag, '--force' => false]) !== self::SUCCESS) {
+            if ($this->callSilent('vendor:publish', ['--tag' => $tag, '--force' => false]) !== self::SUCCESS) {
                 $this->error("Publishing $tag failed.");
 
                 return self::FAILURE;
@@ -135,24 +135,19 @@ class InstallCommand extends Command
     {
         $this->configureDatabaseConnection();
 
+        // --force: redline owns this dedicated SQLite file, so creating it is
+        // never a question. Without it a fresh host makes MigrateCommand ask
+        // "create the database?" - which blocks forever on stdin under
+        // callSilent (no output renders) and throws under --no-interaction.
         $arguments = [
             '--path' => 'vendor/zipavlin/redline/database/redline',
             '--database' => 'redline',
+            '--force' => $silently,
         ];
 
         return $silently
-            ? $this->callQuietly('migrate', $arguments)
+            ? $this->callSilent('migrate', $arguments)
             : $this->call('migrate', $arguments);
-    }
-
-    /**
-     * Seam for tests: run an artisan command without echoing its output.
-     *
-     * @param  array<string, mixed>  $arguments
-     */
-    protected function callQuietly(string $command, array $arguments): int
-    {
-        return $this->callSilent($command, $arguments);
     }
 
     /**

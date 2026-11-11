@@ -78,9 +78,25 @@ function fakeInstallCommand(bool $composerSucceeds = true): InstallCommand
             $this->envWrites[$key] = $value;
         }
 
+        /** @var list<array> Arguments of every `migrate` call, interactive (call) or silent (callQuietly). */
+        public array $migrateCalls = [];
+
+        public function call($command, array $arguments = []): int
+        {
+            if ($command === 'migrate') {
+                $this->migrateCalls[] = $arguments;
+            }
+
+            return parent::call($command, $arguments);
+        }
+
         protected function callQuietly(string $command, array $arguments): int
         {
             $this->quietCalls[] = [$command, $arguments];
+
+            if ($command === 'migrate') {
+                $this->migrateCalls[] = $arguments;
+            }
 
             return $this->quietExitCodes[$command] ?? 0;
         }
@@ -368,6 +384,7 @@ it('installs non-interactively with --silent using the fixed defaults', function
     expect($command->quietCalls[0][1])->toBe([
         '--path' => 'vendor/zipavlin/redline/database/redline',
         '--database' => 'redline',
+        '--force' => true,
     ]);
     expect($command->quietCalls[1][1])->toBe(['--tag' => 'redline-config', '--force' => false]);
     expect($command->quietCalls[2][1])->toBe(['--tag' => 'redline-assets', '--force' => false]);
@@ -427,3 +444,37 @@ it('rejects the removed --auth, --guard and --features options as unknown option
     expect(fn () => $this->artisan('redline:install', [$option => 'x'])->run())
         ->toThrow(InvalidOptionException::class, 'does not exist');
 })->with(['--auth', '--guard', '--features']);
+
+/**
+ * Regression: on a fresh host MigrateCommand asks "create the SQLite database?"
+ * through Laravel Prompts. Under callSilent nothing renders, so the process
+ * blocked on stdin forever (and under --no-interaction it threw). Redline owns
+ * the dedicated file, so migrate must always run with --force (touch, no prompt).
+ */
+it('always migrates with --force so a fresh host never prompts to create the SQLite file', function (bool $silent) {
+    $command = fakeInstallCommand();
+
+    if ($silent) {
+        $this->artisan('redline:install', ['--silent' => true])->assertExitCode(0);
+    } else {
+        $this->artisan('redline:install')
+            ->expectsQuestion('Which auth provider would you like to use?', OpenAuthProvider::title())
+            ->expectsQuestion('Which guard provider would you like to use?', EnvironmentGuardProvider::title())
+            ->expectsQuestion('Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)', '')
+            ->expectsQuestion('How would you like to set up email?', 'Skip - I\'ll configure a mailer later')
+            ->expectsConfirmation('Publish Redline config? This is not needed - you can set Redline in .env', 'no')
+            ->expectsConfirmation('Publish Redline assets to public/vendor/redline/?', 'no')
+            ->expectsConfirmation('Would you like to create the first admin user?', 'no')
+            ->assertExitCode(0);
+    }
+
+    expect($command->migrateCalls)->toHaveCount(1);
+    expect($command->migrateCalls[0])->toMatchArray([
+        '--path' => 'vendor/zipavlin/redline/database/redline',
+        '--database' => 'redline',
+        '--force' => true,
+    ]);
+})->with([
+    'silent' => true,
+    'interactive' => false,
+]);
