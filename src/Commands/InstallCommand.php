@@ -13,7 +13,9 @@ use Zipavlin\Redline\Enums\Feature;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Auth\DomainAuthProvider;
 use Zipavlin\Redline\Providers\Auth\LaravelAuthProvider;
+use Zipavlin\Redline\Providers\Auth\OpenAuthProvider;
 use Zipavlin\Redline\Providers\Auth\PinAuthProvider;
+use Zipavlin\Redline\Providers\Guard\DebugGuardProvider;
 use Zipavlin\Redline\Providers\Guard\GuardProvider;
 use Zipavlin\Redline\Providers\Guard\IpGuardProvider;
 use Zipavlin\Redline\RedlineServiceProvider;
@@ -24,7 +26,8 @@ class InstallCommand extends Command
 {
     use Concerns\WritesEnv;
 
-    public $signature = 'redline:install';
+    public $signature = 'redline:install
+        {--silent : Install non-interactively with fixed defaults (OpenAuthProvider, DebugGuardProvider, screenshots/videos/comments)}';
 
     public $description = 'Interactive setup for Redline';
 
@@ -33,6 +36,10 @@ class InstallCommand extends Command
      */
     public function handle(): int
     {
+        if ($this->option('silent')) {
+            return $this->handleSilent();
+        }
+
         $this->line('');
         $this->line('  <fg=red>●</> <options=bold>Redline</> - interactive setup');
         $this->line('');
@@ -70,16 +77,82 @@ class InstallCommand extends Command
         // There is one backend, so its schema is always created.
         $this->line('  <options=bold>Running database migrations …</>');
 
-        $this->configureDatabaseConnection();
-
-        $this->call('migrate', [
-            '--path' => 'vendor/zipavlin/redline/database/redline',
-            '--database' => 'redline',
-        ]);
+        $this->migrateStorage();
 
         $this->line('  <fg=green>✓</> Redline database tables created.');
 
         $this->line('');
+    }
+
+    /**
+     * Non-interactive install (`--silent`): fixed defaults, no prompts, no
+     * output on success. Skips email setup and first-user creation; auth/guard
+     * sub-options (PINs, domains, IPs) are left unset.
+     */
+    private function handleSilent(): int
+    {
+        if ($this->migrateStorage(silently: true) !== self::SUCCESS) {
+            $this->error('Redline database migrations failed.');
+
+            return self::FAILURE;
+        }
+
+        config(['redline.auth.provider' => OpenAuthProvider::class]);
+
+        $this->writeEnvValue('REDLINE_AUTH_PROVIDER', OpenAuthProvider::class);
+        $this->writeEnvValue('REDLINE_GUARD_PROVIDER', DebugGuardProvider::class);
+        $this->writeEnvValue('REDLINE_FEATURES', implode(',', array_map(
+            fn (Feature $feature) => $feature->value,
+            [Feature::SCREENSHOTS, Feature::VIDEOS, Feature::COMMENTS],
+        )));
+
+        foreach (['redline-config', 'redline-assets'] as $tag) {
+            if ($this->callQuietly('vendor:publish', ['--tag' => $tag, '--force' => false]) !== self::SUCCESS) {
+                $this->error("Publishing $tag failed.");
+
+                return self::FAILURE;
+            }
+        }
+
+        $scripts = new ComposerScripts($this->composerJsonPath());
+        $alreadyCurrent = $scripts->hasAutoloadHook() && ! $scripts->hasUpdateHook();
+
+        if (! $alreadyCurrent && ! $scripts->migrateHooks()) {
+            $this->warn('Could not add the composer post-autoload-dump hook; redline:update will offer to add it later.');
+        }
+
+        $this->markCurrent();
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Runs the package migrations against the dedicated `redline` connection.
+     *
+     * @return int The migrate command's exit code.
+     */
+    private function migrateStorage(bool $silently = false): int
+    {
+        $this->configureDatabaseConnection();
+
+        $arguments = [
+            '--path' => 'vendor/zipavlin/redline/database/redline',
+            '--database' => 'redline',
+        ];
+
+        return $silently
+            ? $this->callQuietly('migrate', $arguments)
+            : $this->call('migrate', $arguments);
+    }
+
+    /**
+     * Seam for tests: run an artisan command without echoing its output.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    protected function callQuietly(string $command, array $arguments): int
+    {
+        return $this->callSilent($command, $arguments);
     }
 
     /**

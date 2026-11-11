@@ -1,10 +1,12 @@
 <?php
 
 use Illuminate\Contracts\Console\Kernel;
+use Symfony\Component\Console\Exception\InvalidOptionException;
 use Zipavlin\Redline\Commands\InstallCommand;
 use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\LaravelAuthProvider;
 use Zipavlin\Redline\Providers\Auth\OpenAuthProvider;
+use Zipavlin\Redline\Providers\Guard\DebugGuardProvider;
 use Zipavlin\Redline\Providers\Guard\EnvironmentGuardProvider;
 use Zipavlin\Redline\Support\ComposerScripts;
 
@@ -41,6 +43,12 @@ function fakeInstallCommand(bool $composerSucceeds = true): InstallCommand
 
         public bool $composerSucceeds = true;
 
+        /** @var list<array{string, array}> Commands run through the --silent seam. */
+        public array $quietCalls = [];
+
+        /** @var array<string, int> Exit code per command for the --silent seam (default 0). */
+        public array $quietExitCodes = [];
+
         public function __construct(public string $composerJsonPath)
         {
             parent::__construct();
@@ -68,6 +76,13 @@ function fakeInstallCommand(bool $composerSucceeds = true): InstallCommand
         protected function writeEnvValue(string $key, string $value): void
         {
             $this->envWrites[$key] = $value;
+        }
+
+        protected function callQuietly(string $command, array $arguments): int
+        {
+            $this->quietCalls[] = [$command, $arguments];
+
+            return $this->quietExitCodes[$command] ?? 0;
         }
     };
 
@@ -331,3 +346,84 @@ it('migrates a legacy composer post-package-update entry to post-autoload-dump',
     expect($decoded['scripts']['post-package-update'])->toBe(['Acme\\Pkg\\Hook::run']);
     expect($decoded['name'])->toBe('acme/app');
 });
+
+/**
+ * --silent: no prompts, fixed defaults (OpenAuthProvider, DebugGuardProvider, no
+ * features). callQuietly() is faked, so no real migration or publish runs.
+ */
+it('installs non-interactively with --silent using the fixed defaults', function () {
+    $command = fakeInstallCommand();
+
+    $this->artisan('redline:install', ['--silent' => true])
+        ->doesntExpectOutputToContain('Redline installed successfully!')
+        ->assertExitCode(0);
+
+    expect($command->envWrites)->toBe([
+        'REDLINE_AUTH_PROVIDER' => OpenAuthProvider::class,
+        'REDLINE_GUARD_PROVIDER' => DebugGuardProvider::class,
+        'REDLINE_FEATURES' => 'screenshots,videos,comments',
+    ]);
+
+    expect(collect($command->quietCalls)->pluck(0)->all())->toBe(['migrate', 'vendor:publish', 'vendor:publish']);
+    expect($command->quietCalls[0][1])->toBe([
+        '--path' => 'vendor/zipavlin/redline/database/redline',
+        '--database' => 'redline',
+    ]);
+    expect($command->quietCalls[1][1])->toBe(['--tag' => 'redline-config', '--force' => false]);
+    expect($command->quietCalls[2][1])->toBe(['--tag' => 'redline-assets', '--force' => false]);
+    expect(config('redline.auth.provider'))->toBe(OpenAuthProvider::class);
+});
+
+it('--silent skips email setup, first-user creation and composer installs', function () {
+    $command = fakeInstallCommand();
+
+    $this->artisan('redline:install', ['--silent' => true])
+        ->doesntExpectOutputToContain('Email')
+        ->doesntExpectOutputToContain('First admin user')
+        ->assertExitCode(0);
+
+    expect($command->composerInstalls)->toBe([]);
+    expect(array_keys($command->envWrites))->not->toContain('MAIL_MAILER');
+});
+
+it('--silent adds the composer hook and is idempotent on re-run', function () {
+    $command = fakeInstallCommand();
+
+    $this->artisan('redline:install', ['--silent' => true])->assertExitCode(0);
+
+    $first = (string) file_get_contents($command->composerJsonPath);
+    expect(json_decode($first, true)['scripts']['post-autoload-dump'])->toBe([ComposerScripts::AUTOLOAD_HOOK]);
+
+    $this->artisan('redline:install', ['--silent' => true])->assertExitCode(0);
+
+    expect((string) file_get_contents($command->composerJsonPath))->toBe($first);
+});
+
+it('--silent returns FAILURE and writes nothing when migrations fail', function () {
+    $command = fakeInstallCommand();
+    $command->quietExitCodes['migrate'] = 1;
+
+    $this->artisan('redline:install', ['--silent' => true])->assertExitCode(1);
+
+    expect($command->envWrites)->toBe([]);
+    expect(collect($command->quietCalls)->pluck(0)->all())->toBe(['migrate']);
+});
+
+it('--silent returns FAILURE when publishing fails', function () {
+    $command = fakeInstallCommand();
+    $command->quietExitCodes['vendor:publish'] = 1;
+
+    $this->artisan('redline:install', ['--silent' => true])->assertExitCode(1);
+});
+
+it('rejects the removed --auth, --guard and --features options as unknown options', function (string $option) {
+    fakeInstallCommand();
+
+    // Symfony throws "The "--x" option does not exist."; the console kernel
+    // renders it as a normal command failure (exit 1).
+    expect(fn () => $this->artisan('redline:install', [$option => 'x', '--silent' => true])->run())
+        ->toThrow(InvalidOptionException::class, 'does not exist');
+
+    expect(fn () => $this->artisan('redline:install', [$option => 'x'])->run())
+        ->toThrow(InvalidOptionException::class, 'does not exist');
+})->with(['--auth', '--guard', '--features']);

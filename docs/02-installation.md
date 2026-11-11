@@ -26,6 +26,8 @@ The recommended path. The command walks you through auth, guard, features, email
 
 Check detailed information about each step in [08-commands.md](08-commands.md#redlineinstall)
 
+For scripts and CI, `php artisan redline:install --silent` runs the install with no prompts and no output on success. It takes no other options and uses fixed defaults: `OpenAuthProvider`, `DebugGuardProvider` and the basic features (`REDLINE_FEATURES=screenshots,videos,comments`). It runs the migrations, publishes config and assets without overwriting existing files, and adds the composer hook (idempotent). Email setup and first-user creation are skipped. Exit code is non-zero if migration or publishing fails. Change any default later by editing `.env` or running the interactive installer.
+
 1. **Storage** - *"Controls how data is saved."*
 
    There is one backend, so there is no choice: the installer makes sure
