@@ -78,7 +78,7 @@ function fakeInstallCommand(bool $composerSucceeds = true): InstallCommand
             $this->envWrites[$key] = $value;
         }
 
-        /** @var list<array> Arguments of every `migrate` call, interactive (call) or silent (callQuietly). */
+        /** @var list<array> Arguments of every `migrate` call, interactive (call) or silent (callSilent). */
         public array $migrateCalls = [];
 
         public function call($command, array $arguments = []): int
@@ -90,7 +90,7 @@ function fakeInstallCommand(bool $composerSucceeds = true): InstallCommand
             return parent::call($command, $arguments);
         }
 
-        protected function callQuietly(string $command, array $arguments): int
+        public function callSilent($command, array $arguments = []): int
         {
             $this->quietCalls[] = [$command, $arguments];
 
@@ -365,7 +365,7 @@ it('migrates a legacy composer post-package-update entry to post-autoload-dump',
 
 /**
  * --silent: no prompts, fixed defaults (OpenAuthProvider, DebugGuardProvider, no
- * features). callQuietly() is faked, so no real migration or publish runs.
+ * features). callSilent() is faked, so no real migration or publish runs.
  */
 it('installs non-interactively with --silent using the fixed defaults', function () {
     $command = fakeInstallCommand();
@@ -449,9 +449,10 @@ it('rejects the removed --auth, --guard and --features options as unknown option
  * Regression: on a fresh host MigrateCommand asks "create the SQLite database?"
  * through Laravel Prompts. Under callSilent nothing renders, so the process
  * blocked on stdin forever (and under --no-interaction it threw). Redline owns
- * the dedicated file, so migrate must always run with --force (touch, no prompt).
+ * the dedicated file, so a silent install migrates with --force (touch, no
+ * prompt); interactively the user can answer the prompt, so --force is off.
  */
-it('always migrates with --force so a fresh host never prompts to create the SQLite file', function (bool $silent) {
+it('migrates with --force under --silent so a fresh host never prompts to create the SQLite file', function (bool $silent) {
     $command = fakeInstallCommand();
 
     if ($silent) {
@@ -472,7 +473,7 @@ it('always migrates with --force so a fresh host never prompts to create the SQL
     expect($command->migrateCalls[0])->toMatchArray([
         '--path' => 'vendor/zipavlin/redline/database/redline',
         '--database' => 'redline',
-        '--force' => true,
+        '--force' => $silent,
     ]);
 })->with([
     'silent' => true,
