@@ -14,6 +14,7 @@ class NewReportMail extends Mailable
     public function __construct(
         public string $reporterName,
         public string $title,
+        public string $description,
         public string $reportUrl,
     ) {}
 

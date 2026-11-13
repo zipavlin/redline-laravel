@@ -18,7 +18,7 @@ Redline sends email through the **host app's configured default mailer** for fiv
 - **Trigger**: every successful submission to `POST /redline/api/report` (`Zipavlin\Redline\Http\Controllers\Api\ReportController::store`).
 - **Recipients**: every user with role `developer` or `admin`, **except the reporter**.
 - **Subject**: `New bug report: {title}`, where `title` is the first 80 characters of the report body (HTML stripped) or `Untitled report`.
-- **Body**: reporter name, the title, and an "Open report" button linking to the dashboard with `?redline-report={id}` - a deep link straight to the report.
+- **Body**: reporter name, the full report description (HTML stripped, capped at 2000 characters, `Untitled report` when the stripped body is empty), and an "Open report" button linking to the dashboard with `?redline-report={id}` - a deep link straight to the report.
 
 ### Password reset - `PasswordResetMail`
 
@@ -69,7 +69,7 @@ Publish the templates to override them:
 php artisan vendor:publish --tag=redline-mail-views
 ```
 
-This copies the package's `resources/views/mail/` into the host app at `resources/views/vendor/redline/mail/` - the standard vendor-view override location, which takes precedence over the package's own views. Edit the Blade files there (they use Laravel's `x-mail::*` Markdown mail components). Keep the filenames identical; the mailable in `src/Mail/` binds the variables each template can use (e.g. `$name`, `$title`, `$reportUrl`, `$resetUrl`, `$inviteUrl`, `$dashboardUrl`, `$verifyUrl`, `$reporterName`, `$appUrl`).
+This copies the package's `resources/views/mail/` into the host app at `resources/views/vendor/redline/mail/` - the standard vendor-view override location, which takes precedence over the package's own views. Because published copies win over the package defaults, a stale published view keeps serving old content after an upgrade (the reported HTTP-basic-auth logo symptom is most likely such a stale copy - the package template embeds the logo as inline SVG). Refresh published views with `php artisan redline:update` or `php artisan vendor:publish --tag=redline-mail-views --force`. Edit the Blade files there (they use Laravel's `x-mail::*` Markdown mail components). Keep the filenames identical; the mailable in `src/Mail/` binds the variables each template can use (e.g. `$name`, `$title`, `$reportUrl`, `$resetUrl`, `$inviteUrl`, `$dashboardUrl`, `$verifyUrl`, `$reporterName`, `$appUrl`).
 
 Styling comes from Laravel's default Markdown mail theme; to restyle it, publish Laravel's own `laravel-mail` assets (`php artisan vendor:publish --tag=laravel-mail`) as you would in any host app.
 

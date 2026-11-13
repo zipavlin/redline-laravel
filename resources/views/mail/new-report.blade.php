@@ -8,7 +8,7 @@
 
 **{{ $reporterName }}** filed a new report:
 
-> {{ $title }}
+> {!! nl2br(str_replace(['[', ']'], ['&#91;', '&#93;'], e($description))) !!}
 
 <x-mail::button :url="$reportUrl">
 Open report

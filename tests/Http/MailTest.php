@@ -3,9 +3,11 @@
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Zipavlin\Redline\Mail\NewReportMail;
 use Zipavlin\Redline\Mail\PasswordResetMail;
 use Zipavlin\Redline\Mail\VerifyEmailMail;
+use Zipavlin\Redline\Models\Report;
 use Zipavlin\Redline\Models\User;
 use Zipavlin\Redline\Providers\Auth\AuthProvider;
 use Zipavlin\Redline\Providers\Auth\DomainAuthProvider;
@@ -54,14 +56,34 @@ it('does NOT email when no mailer is configured (gated on mailConfigured)', func
     Mail::assertNothingSent();
 });
 
-it('notifies developers/admins when a report is filed', function () {
+it('notifies developers/admins with the full description and keeps the preview subject', function () {
     Mail::fake();
     makeUser('admin'); // a recipient must exist
 
-    $this->postJson('/redline/api/report', makeReportData(), authHeaders('reporter'))
-        ->assertStatus(201);
+    $body = str_repeat('abc ', 30)."TAILMARKER beyond the preview\nsecond line, doesn't work & shows [Update your password](https://evil.example)";
+    $reportId = $this->postJson('/redline/api/report', makeReportData(['body' => $body]), authHeaders('reporter'))
+        ->assertStatus(201)->json('id');
 
-    Mail::assertSent(NewReportMail::class);
+    Mail::assertSent(NewReportMail::class, function (NewReportMail $mail) use ($reportId) {
+        $text = trim(strip_tags((string) app(Report::class)->find($reportId)->body));
+
+        $rendered = $mail->render();
+
+        // The mail markdown pipeline re-emits nl2br's <br /> as <br> and
+        // decodes &#039; back to a literal apostrophe in the final HTML -
+        // assert the visible outcome, not the intermediate escapes.
+        expect($mail->hasSubject('New bug report: '.Str::limit($text, 80)))->toBeTrue()
+            ->and($mail->description)->toBe($text)
+            ->and($rendered)->toContain('TAILMARKER beyond the preview')
+            ->and($rendered)->toContain('beyond the preview<br') // anchored to the description, not the template's own <br>
+            ->and($rendered)->toContain("second line, doesn't work")
+            ->and($rendered)->not->toContain('&amp;#039;')
+            ->and($rendered)->not->toContain('&amp;lt;br')
+            ->and($rendered)->not->toContain('href="https://evil.example"')
+            ->and($rendered)->toContain("doesn't work");
+
+        return true;
+    });
 });
 
 it('skips opted-out developers/admins but still emails the others', function () {

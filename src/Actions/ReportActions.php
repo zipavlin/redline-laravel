@@ -328,9 +328,11 @@ class ReportActions extends Action
             return;
         }
 
-        $title = Str::limit(trim(strip_tags((string) $report->body)), 80) ?: 'Untitled report';
+        $text = trim(strip_tags((string) $report->body));
+        $title = Str::limit($text, 80) ?: 'Untitled report';
+        $description = Str::limit($text, 2000) ?: 'Untitled report';
         $url = rtrim($this->storage->dashboardUrl(), '/').'?redline-report='.$report->id;
 
-        RedlineServiceProvider::mail($recipients, new NewReportMail($reporter->name, $title, $url));
+        RedlineServiceProvider::mail($recipients, new NewReportMail($reporter->name, $title, $description, $url));
     }
 }
