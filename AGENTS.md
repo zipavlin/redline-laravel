@@ -20,11 +20,11 @@ Composer package `zipavlin/redline` — the Laravel backend for Redline: REST AP
 - Members pivot: plain `belongsToMany` `redline_members` (`Report::members()` → `User`), composite PK `(report_id, user_id)`, real FKs with `CASCADE` — cleanup delegated to the database. `POST/DELETE /report/{report}/member` (body `{"user_ids": [...]}`) are `Operation::UPDATE`-gated (developer/admin/author; DELETE also an eligible non-guest member removing exactly themselves); both respond `{ "members": [...] }` through the shared `Support\Members::forReport()` projection so all surfaces stay consistent.
 - Mail views `resources/views/mail/`: `new-report`, `password-reset`, `user-invitation`, `verify`, `registration-approved`. `REDLINE_MAIL` kill switch; sends are best-effort and never fail a request.
 - Features: `REDLINE_FEATURES` comma-separated opt-in; an unknown value throws at boot; `redline:enable` lists/toggles.
-- Artisan commands (exactly six): `redline:install`, `redline:update` (alias `redline:upgrade`), `redline:enable`, `redline:user`, `redline:mcp`, `redline:remove`. No `redline:list`, no `redline:dev`.
+- Artisan commands (exactly seven): `redline:install`, `redline:update` (alias `redline:upgrade`), `redline:enable`, `redline:user`, `redline:location`, `redline:mcp`, `redline:remove`. No `redline:list`, no `redline:dev`.
 
 ## Running and verifying
 
-- `vendor/bin/pint --dirty && composer test` (Pest). Single file: `vendor/bin/pest --filter=Report`. Last recorded full baseline: 698 passed / 2651 assertions — refresh from `composer test` after significant work.
+- `vendor/bin/pint --dirty && composer test` (Pest). Single file: `vendor/bin/pest --filter=Report`. Last recorded full baseline: 757 passed / 2949 assertions — refresh from `composer test` after significant work.
 - `composer prepare` runs testbench package:discover (wired onto post-autoload-dump).
 
 ## Conventions that differ from defaults
@@ -45,9 +45,9 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 - **Always registered**, regardless of environment: `vendor:publish` tags
   (`redline-assets` → `public/vendor/redline`, `redline-config` → `config/redline.php`,
-  `redline-mail-views` → `resources/views/vendor/redline/mail`) and the 6 artisan commands
-  (`redline:install`, `redline:update`, `redline:user`, `redline:mcp`, `redline:remove`,
-  `redline:enable`).
+  `redline-mail-views` → `resources/views/vendor/redline/mail`) and the 7 artisan commands
+  (`redline:install`, `redline:update`, `redline:user`, `redline:location`,
+  `redline:mcp`, `redline:remove`, `redline:enable`).
 - **Loaded whenever a local storage provider is active**: the dashboard shell
   (`routes/web.php` catch-all serving the SPA at `/{redline.path}`, default `/redline`).
 - **Route caching IS supported**: the package route files AND the MCP route register in
@@ -98,7 +98,7 @@ The package is **not** "completely inert outside staging". Only parts of it are 
 
 ### PHP (Pest)
 ```
-composer test                    # full Pest suite (baseline: 698 passed, 0 skipped; see Test status)
+composer test                    # full Pest suite (baseline: 757 passed, 0 skipped; see Test status)
 composer test-coverage           # Pest + coverage
 composer format                  # pint (Laravel defaults; no pint.json)
 vendor/bin/pest --filter=Report  # single file / group
@@ -236,8 +236,8 @@ supported (no `relatedSchema` on that filter) and 422s, as intended.
   `redline:install` prints a `redline:mcp` hint + the agent endpoint when the selected
   features include `mcp`. New `redline:enable` command lists/toggles features;
   `redline:update` prints the current feature state. Commands: `redline:install`,
-  `redline:update`, `redline:enable`, `redline:user`, `redline:mcp`, `redline:remove`
-  (six, not five).
+  `redline:update`, `redline:enable`, `redline:user`, `redline:location`, `redline:mcp`,
+  `redline:remove` (seven, not six).
 - MCP API tokens: `rlm_` + 40 hex chars, sha-256-hashed in `redline_tokens`
   (migration `0010`, also adds `redline_users.password_epoch`). Issued only by
   `redline:mcp`; refused for pending/guest users; plaintext shown once.
@@ -285,6 +285,7 @@ from element attributes.
   and the composer `post-package-update` hook (neither clobbered under `--force`);
   flags `--force`, `--dry-run`, `--no-backup`.
 - `redline:user` - create/edit/promote users directly in storage (create blocked under `LaravelAuthProvider`); flags `--promote`, `--edit` (mutually exclusive).
+- `redline:location` - batch-rename the `location` of existing reports from one page to another after a route rename: `redline:location {from} {to}`, flags `--dry-run` and `--F|force`; exact match on the stored `location`, no other column touched; zero matches exits 1.
 - `redline:remove` - wipe all redline data (including the composer hook entry), removes redline from the project.
 - `redline:mcp` - MCP API tokens in `redline_tokens`: bare = interactive wizard
   (pick an approved non-guest user; roster of active tokens → add/revoke; agent

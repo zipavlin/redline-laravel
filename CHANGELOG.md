@@ -2,6 +2,16 @@
 
 ## Added
 
+- **Move reports to a new page location** - when you rename a route in your
+  app, the reports filed against the old page stay behind and stop showing up
+  on the new one. `php artisan redline:location /old-path /new-path` moves them
+  in one step: it counts how many reports match and asks before writing,
+  `--dry-run` shows the count without changing anything, and `-F` skips the
+  question. Only the stored `location` changes; each report keeps the `url` it
+  was filed from. Running it again after the move reports that nothing is
+  stored at the old location, and swapping the two arguments moves the reports
+  back.
+
 - **Per-user opt-out of new-report emails** - developers and admins no longer
   have to receive an email for every report filed. Each user can switch the
   new-report notification off for themselves (default stays on, so existing

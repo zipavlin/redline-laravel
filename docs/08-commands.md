@@ -1,6 +1,6 @@
 # Commands
 
-Redline ships exactly six artisan commands. They are registered **unconditionally** - in every
+Redline ships exactly seven artisan commands. They are registered **unconditionally** - in every
 environment and regardless of guard, auth, or storage configuration - so setup and teardown always
 work, even before the package is "active" on a given host:
 
@@ -10,6 +10,7 @@ work, even before the package is "active" on a given host:
 | `php artisan redline:update` | Upgrade an existing install to the package version |
 | `php artisan redline:enable` | List / enable / disable features (writes `REDLINE_FEATURES`) |
 | `php artisan redline:user` | Create a user directly, any role |
+| `php artisan redline:location` | Batch-move existing reports from one page location to another |
 | `php artisan redline:mcp` | Interactive MCP token wizard / create / list / revoke MCP API tokens |
 | `php artisan redline:remove` | Permanently remove Redline, its data, and (optionally) the package |
 
@@ -417,6 +418,36 @@ login for the new address provisions a NEW reporter - email is the host-session 
 The storage provider is booted first in every mode; if it cannot boot (e.g. the SQLite schema
 is missing), the command fails with the boot error message - run `redline:install` first.
 
+## redline:location
+
+`php artisan redline:location /old-path /new-path` moves existing reports from one page
+location to another. Use it after you rename a route in your application: reports filed on
+the old page keep the old `location` and stop appearing under the new one.
+
+```bash
+php artisan redline:location /dashboard /reports            # counts, asks, then moves
+php artisan redline:location /dashboard /reports --dry-run  # count only, writes nothing
+php artisan redline:location /dashboard /reports -F         # skip the confirmation
+```
+
+```
+  Move 12 report(s) from /dashboard to /reports? (yes/no) [no]:
+  ✓ Moved 12 report(s) from /dashboard to /reports.
+```
+
+- The match is exact: only rows whose stored `location` equals the first argument move
+  (both arguments are trimmed first). Query-string variants and trailing-slash variants are
+  separate locations, so run it once for each one you want to move.
+- Only the `location` column changes. The report's `url`, element, pin, priority, screenshots
+  and comments are untouched, so every report still shows the page it was filed from.
+- Nothing stored at the old location exits 1 with `Nothing is stored at /dashboard - no
+  reports to move.`, which makes a re-run after a successful move harmless. Passing the same
+  value twice, or a blank one, also exits 1 and writes nothing.
+- `--dry-run` prints the count and exits without writing; `-F` / `--force` skips the question
+  for deploy scripts. Declining the confirmation exits 0 and changes nothing.
+- There is no backup step. The move is one SQL `UPDATE`, and running the command again with
+  the two arguments swapped moves the reports back.
+
 ## redline:remove --force
 
 ```bash
@@ -484,6 +515,7 @@ by hand. With `--force`, this prompt is skipped and the package is removed autom
 | `redline:update` (alias `redline:upgrade`) | Upgrade an existing install: preflight check, pending migrations (+ SQLite backup), assets re-published with `--force`, optional config/mail re-publish, composer hook migration, cache clears; prints the current feature state | `-F`, `--force` - non-interactive (the composer hook migrates silently); published config/mail views left untouched; `--dry-run` - report only; `--no-backup` - skip backup |
 | `redline:enable` | List every feature + state; enable/disable by name in fixed enum order; writes `REDLINE_FEATURES` (key kept even when all off); unknown name exits 1 writing nothing | `feature*` (positional, comma/space separated); `-D`, `--disable=*` |
 | `redline:user` | Create/edit/promote a user directly in storage; bypasses auth-provider policies (password min 6) | `--promote`, `--edit` (mutually exclusive) |
+| `redline:location` | Batch-move existing reports from one page location to another after a route rename; exact match on the stored `location`, no other column touched; a re-run with swapped arguments reverses it | `from`, `to` (positional, required); `--dry-run` - count only, mutates nothing; `-F`, `--force` - skip the confirmation |
 | `redline:mcp` | Interactive MCP-token wizard plus create/list/revoke (`redline_tokens`); refuses pending/guest owners; plaintext shown once; roster carries a 4-char identification hint | bare = wizard, `--name=`, `--user=`, `--list`, `--revoke={id}`, `--revoke-all` (needs `--user=`) |
 | `redline:remove` | Wipe all Redline data (including `redline_tokens`), published assets/config, the composer hook and `REDLINE_*` `.env` entries; scan for manual references; optionally `composer remove zipavlin/redline` | `-F`, `--force` - skip all confirmations (including package removal) |
 

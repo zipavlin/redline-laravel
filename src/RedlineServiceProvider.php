@@ -20,6 +20,7 @@ use Laravel\Mcp\Facades\Mcp;
 use Zipavlin\Redline\Commands\CreateUserCommand;
 use Zipavlin\Redline\Commands\EnableCommand;
 use Zipavlin\Redline\Commands\InstallCommand;
+use Zipavlin\Redline\Commands\LocationCommand;
 use Zipavlin\Redline\Commands\McpCommand;
 use Zipavlin\Redline\Commands\RemoveCommand;
 use Zipavlin\Redline\Commands\UpdateCommand;
@@ -130,6 +131,7 @@ class RedlineServiceProvider extends ServiceProvider
                 InstallCommand::class,
                 UpdateCommand::class,
                 EnableCommand::class,
+                LocationCommand::class,
                 RemoveCommand::class,
                 CreateUserCommand::class,
                 McpCommand::class,
