@@ -251,9 +251,10 @@ it('runs the wizard on a bare invocation: user select, agent select, mint with b
     $this->artisan('redline:mcp')
         ->expectsChoice('Which account gets the token?', "{$user->email} (developer)", ["{$user->email} (developer)"], true)
         ->expectsChoice('Which agent will use this token?', 'OpenCode', redlineAgentChoices(), true)
+        ->expectsChoice('Is this server behind HTTP Basic Auth?', 'No', ['No', 'Yes'], true)
         ->assertExitCode(0)
         ->expectsOutputToContain('Token created for')
-        ->expectsOutputToContain('docs/12-mcp.md');
+        ->expectsOutputToContain('https://github.com/zipavlin/redline-laravel/blob/main/docs/12-mcp.md#behind-http-basic-auth');
 
     $row = app(Token::class)->where('user_id', $user->id)->first();
 
@@ -279,6 +280,7 @@ it('hides guest and pending accounts from the wizard user list', function () {
     $this->artisan('redline:mcp')
         ->expectsChoice('Which account gets the token?', "{$approved->email} (developer)", ["{$approved->email} (developer)"], true)
         ->expectsChoice('Which agent will use this token?', 'Claude Code', redlineAgentChoices(), true)
+        ->expectsChoice('Is this server behind HTTP Basic Auth?', 'No', ['No', 'Yes'], true)
         ->assertExitCode(0);
 
     expect(app(Token::class)->where('user_id', $approved->id)->count())->toBe(1);
@@ -294,6 +296,7 @@ it('falls back to a typed filter when the approved pool exceeds 25 users', funct
     $this->artisan('redline:mcp')
         ->expectsQuestion('26 approved users. Type a name or email fragment to filter (or an exact email):', $user->email)
         ->expectsChoice('Which agent will use this token?', 'Claude Code', redlineAgentChoices(), true)
+        ->expectsChoice('Is this server behind HTTP Basic Auth?', 'No', ['No', 'Yes'], true)
         ->assertExitCode(0);
 
     expect(app(Token::class)->where('user_id', $user->id)->count())->toBe(1);
@@ -364,6 +367,7 @@ it('asks replace-or-add on a same-name collision and revokes on replace', functi
         ->expectsChoice('The user has 1 active token(s). What next?', 'Add new token', ['Add new token', 'Revoke a token'], true)
         ->expectsChoice('Which agent will use this token?', 'Codex', redlineAgentChoices(), true)
         ->expectsChoice('An active token named "codex" already exists for this user.', 'Replace it (revoke the existing one)', ['Replace it (revoke the existing one)', 'Add another'], true)
+        ->expectsChoice('Is this server behind HTTP Basic Auth?', 'No', ['No', 'Yes'], true)
         ->assertExitCode(0);
 
     expect($row->refresh()->revoked_at)->not->toBeNull();
@@ -384,6 +388,7 @@ it('adds an extra token on a same-name collision when "add another" is picked', 
         ->expectsChoice('The user has 1 active token(s). What next?', 'Add new token', ['Add new token', 'Revoke a token'], true)
         ->expectsChoice('Which agent will use this token?', 'Codex', redlineAgentChoices(), true)
         ->expectsChoice('An active token named "codex" already exists for this user.', 'Add another', ['Replace it (revoke the existing one)', 'Add another'], true)
+        ->expectsChoice('Is this server behind HTTP Basic Auth?', 'No', ['No', 'Yes'], true)
         ->assertExitCode(0);
 
     expect($row->refresh()->revoked_at)->toBeNull();
@@ -402,6 +407,7 @@ it('prints the generic setup block for the wizard Other choice with a typed name
         ->expectsChoice('Which account gets the token?', "{$user->email} (developer)", ["{$user->email} (developer)"], true)
         ->expectsChoice('Which agent will use this token?', 'Other (type a custom name)', redlineAgentChoices(), true)
         ->expectsQuestion('Name for the token (e.g. what will use it):', 'my-templater')
+        ->expectsChoice('Is this server behind HTTP Basic Auth?', 'No', ['No', 'Yes'], true)
         ->assertExitCode(0)
         // Substring expectations share doWrite chunks eagerly in Mockery; keep
         // this probe minimal and anchored inside the block chunk.
@@ -497,4 +503,59 @@ it('does not serialize password_epoch on user rows or token_hash on token rows',
     $tokenRow = app(Token::class)->where('token_hash', Token::hash($plaintext))->first()->toArray();
 
     expect($tokenRow)->not->toHaveKey('token_hash');
+});
+
+it('prints only the GitHub docs link when the wizard answers no to HTTP Basic Auth', function () {
+    config(['app.url' => 'https://staging.example.com']);
+    $user = makeTokenOwner();
+
+    $this->artisan('redline:mcp')
+        ->expectsChoice('Which account gets the token?', "{$user->email} (developer)", ["{$user->email} (developer)"], true)
+        ->expectsChoice('Which agent will use this token?', 'OpenCode', redlineAgentChoices(), true)
+        ->expectsChoice('Is this server behind HTTP Basic Auth?', 'No', ['No', 'Yes'], true)
+        ->assertExitCode(0)
+        ->expectsOutputToContain('https://github.com/zipavlin/redline-laravel/blob/main/docs/12-mcp.md#behind-http-basic-auth')
+        ->doesntExpectOutputToContain('Require all granted');
+});
+
+it('prints the Apache Basic Auth bypass with the configured literal path', function () {
+    config(['app.url' => 'https://staging.example.com', 'redline.path' => 'rl']);
+    $user = makeTokenOwner();
+
+    $this->artisan('redline:mcp')
+        ->expectsChoice('Which account gets the token?', "{$user->email} (developer)", ["{$user->email} (developer)"], true)
+        ->expectsChoice('Which agent will use this token?', 'OpenCode', redlineAgentChoices(), true)
+        ->expectsChoice('Is this server behind HTTP Basic Auth?', 'Yes', ['No', 'Yes'], true)
+        ->expectsChoice('Which server stack are you using?', 'apache', ['apache', 'nginx'], true)
+        ->assertExitCode(0)
+        ->expectsOutputToContain('<If "%{THE_REQUEST} =~ m#^[A-Z]+ /rl/api/mcp(/| )#">')
+        ->expectsOutputToContain('curl -i https://<site>/rl/api/mcp')
+        ->doesntExpectOutputToContain('Order allow,deny');
+});
+
+it('prints the nginx Basic Auth bypass and says it is untested', function () {
+    config(['app.url' => 'https://staging.example.com', 'redline.path' => 'rl']);
+    $user = makeTokenOwner();
+
+    $this->artisan('redline:mcp')
+        ->expectsChoice('Which account gets the token?', "{$user->email} (developer)", ["{$user->email} (developer)"], true)
+        ->expectsChoice('Which agent will use this token?', 'OpenCode', redlineAgentChoices(), true)
+        ->expectsChoice('Is this server behind HTTP Basic Auth?', 'Yes', ['No', 'Yes'], true)
+        ->expectsChoice('Which server stack are you using?', 'nginx', ['apache', 'nginx'], true)
+        ->assertExitCode(0)
+        ->expectsOutputToContain('nginx (untested)')
+        // The exact "auth_basic off;" string does not match through Laravel's
+        // per-write output matching, so this stops short of the semicolon on purpose.
+        ->expectsOutputToContain('auth_basic off');
+});
+
+it('prints the Basic Auth docs hint on --user=/--name= without asking anything', function () {
+    config(['app.url' => 'https://staging.example.com']);
+    $user = makeTokenOwner();
+
+    $this->artisan('redline:mcp', ['--user' => $user->email, '--name' => 'agent'])
+        ->assertExitCode(0)
+        ->expectsOutputToContain('Behind HTTP Basic Auth? Docs: https://github.com/zipavlin/redline-laravel/blob/main/docs/12-mcp.md#behind-http-basic-auth');
+
+    expect(app(Token::class)->where('user_id', $user->id)->count())->toBe(1);
 });

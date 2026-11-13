@@ -56,7 +56,7 @@ flood control) and `redline-mcp` (120/min, post-auth) - with their env knobs
 exactly as documented in [Configuration](03-configuration.md#rate-limiting);
 one cross-reference, no duplication here.
 
-## Behind HTTP Basic Auth (Apache)
+## Behind HTTP Basic Auth
 
 On a host behind server-side HTTP Basic Auth, the MCP surface needs one extra
 step the rest of Redline does not:
@@ -65,36 +65,106 @@ step the rest of Redline does not:
 - Apache consumes the `Authorization: Basic ...` layer itself and forwards a
   `Bearer` header only after the Basic check has passed - an `rlm_` header
   arriving before that never reaches Redline's middleware chain.
+- An unexempted MCP client therefore keeps answering the Basic challenge and
+  can never authenticate.
 
-- An unexempted MCP client therefore keeps answering Apache's 401 Basic
-  challenge and can never authenticate.
+The endpoint has to be exempted from the challenge in the vhost that actually
+serves the site (verify which one with `apachectl -S`; placement errors are
+silent). `php artisan redline:mcp` prints the same snippet for the configured
+path, with the path regex-quoted so characters such as `+`, `(` or `.` stay
+literal. The examples keep the `{redline.path}` placeholder - substitute the
+literal path (quote regex characters if it has any) when `REDLINE_PATH` is
+customised.
 
-Exempt the MCP endpoint inside the vhost that actually serves the site (verify
-which one with `apachectl -S`; placement errors are silent), after the Basic
-Auth configuration:
+### Apache 2.4+
+
+Both Apache variants below need Apache **2.4.8+** - the `<If>` directive. Do not
+mix `Require` with `Order` / `Allow` / `Satisfy` in one scope: Apache warns and
+merges the results.
 
 ```apache
-<LocationMatch "^/{redline.path}/api/mcp">
+# Let the Redline MCP endpoint through the site's HTTP Basic Auth.
+# Add this inside the site's <VirtualHost> block, in both the :80 and :443 vhosts.
+# (Certbot's *-le-ssl.conf is a copy made at certificate time, so edits to :80 are not carried over.)
+# It matches the original request line, so it still applies after Laravel's .htaccess
+# rewrites the request internally to index.php.
+<If "%{THE_REQUEST} =~ m#^[A-Z]+ /{redline.path}/api/mcp(/| )#">
     Require all granted
-</LocationMatch>
+</If>
 ```
 
-(On a host with a custom `REDLINE_PATH`, put the literal path into the
-pattern.)
+### Legacy Apache
 
-nginx equivalent - turn Basic Auth off for that location. The block below is
-the minimal diff off your edge config; copy your site's normal PHP location
-block (fastcgi_pass etc.) around it:
+Use this version if the config still uses the legacy `Order` / `Allow` /
+`Satisfy` directives (for example in a `<Directory>` block that also has
+`Require user ...`). The `Satisfy Any` + `Allow from all` pair already grants
+the request, so it needs no `Require all granted` line. If requests still fail,
+look for `AH01797 ... index.php` in the Apache error log: the access rules are
+being applied to the internally rewritten `/index.php` request.
+
+```apache
+# Let the Redline MCP endpoint through the site's HTTP Basic Auth.
+# Use this version if your config still uses the legacy Order / Allow / Satisfy directives
+# (for example in a <Directory> block that also has Require user ...).
+# Add it inside the site's <VirtualHost> block, in both the :80 and :443 vhosts.
+# If requests still fail, look for "AH01797 ... index.php" in the Apache error log. It means
+# the access rules are being applied to the internally rewritten /index.php request.
+<If "%{THE_REQUEST} =~ m#^[A-Z]+ /{redline.path}/api/mcp(/| )#">
+    AuthType None
+    Satisfy Any
+    Order allow,deny
+    Allow from all
+</If>
+```
+
+### nginx (untested)
+
+Not tested against a real host yet. Copy the site's own PHP location block,
+change only the `location` regex and add `auth_basic off;`; the other lines in
+the example below are fallbacks. Regex locations match in config order, so put
+it next to the site's other regex locations (for example after
+`location ~ \.php`).
 
 ```nginx
-location ~ ^/{redline.path}/api/mcp {
-    auth_basic off;  # copy your site's normal PHP location block (fastcgi_pass etc.)
+# Let the Redline MCP endpoint through the site's HTTP Basic Auth.
+# Copy your site's normal PHP location block, change only the location regex
+# and add auth_basic off; the other lines below are fallback examples.
+# Regex locations match in config order - put this next to your other regex
+# locations, for example after "location ~ \.php".
+location ~ ^/{redline.path}/api/mcp(/|$) {
+    auth_basic off;
+
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $realpath_root/index.php;
+    fastcgi_param SCRIPT_NAME /index.php;
+    fastcgi_pass unix:/run/php/php8.3-fpm.sock;
 }
 ```
+
+### Check
+
+```bash
+# Check: curl -i https://<site>/{redline.path}/api/mcp
+# A JSON 401 with "WWW-Authenticate: Bearer" means the Basic Auth is bypassed and the app wants a token.
+# A "Restricted Files" 401 page from Apache, or a Basic 401 page from nginx, means the block is not taking effect.
+# Check that the rest of the site is still protected: curl -i https://<site>/ must still answer the HTTP Basic challenge.
+```
+
+Keep the bypass inside the `<If>` / `location` block - never paste `AuthType
+None`, `Satisfy Any`, `Allow from all` or `auth_basic off` into a `<Directory>`
+or a wider location.
 
 That leaves the endpoint safe on Redline layers alone: the route stays behind
 Redline's middleware chain - the `mcp` feature flag, the bearer token check and
 the two limiters - so it answers only to holders of a valid `rlm_` token.
+
+## Sample agent prompt
+
+A short opening prompt that keeps the agent's work reviewable:
+
+> Use redline mcp and make a short list of reports on all pages. We need to fix
+> them one by one with a short plan beforehand (that I approve) so we will not
+> be fixing wrong thing
 
 ## Related
 

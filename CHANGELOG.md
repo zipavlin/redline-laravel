@@ -10,6 +10,17 @@
 
 ## Changed
 
+- **Basic Auth setup for agents** - `php artisan redline:mcp` now asks whether
+  your site sits behind HTTP Basic Auth and, if it does, which stack you run.
+  It then prints the exact Apache or nginx exemption for your configured path
+  (custom paths are regex-quoted), a `curl -i` check that proves the bypass
+  works plus a second one proving the rest of the site is still protected, and
+  the GitHub docs link. Answering no prints only the link, so the wizard stays
+  short. This replaces the `redline:mcp` one-line reminder from 0.3.1; the
+  non-interactive `--user=` / `--name=` paths keep a one-line docs pointer, and
+  the MCP docs chapter now covers Apache 2.4, legacy Apache and nginx, plus a
+  starter prompt for agents.
+
 - **Quieter, smarter composer auto-update** - the automatic `redline:update`
   that keeps your install current now runs once per composer command instead
   of once per updated package, and only actually fires when the installed

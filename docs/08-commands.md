@@ -227,6 +227,12 @@ endpoint and token inline. The default token name is the selected agent's
 slug; `Other` asks for a typed name; an active token of the same name asks
 whether to **replace** (revoke, then mint) or **add**.
 
+After the setup block the wizard asks whether the server sits behind HTTP
+Basic Auth and, on yes, which stack (`apache` | `nginx`); it then prints that
+stack's copy-paste bypass snippet for the configured path, a `curl -i` check and
+the [MCP docs on GitHub](https://github.com/zipavlin/redline-laravel/blob/main/docs/12-mcp.md#behind-http-basic-auth).
+Answering no prints only that link.
+
 The flags keep the classic non-interactive behaviour:
 
 ```bash
@@ -236,6 +242,9 @@ php artisan redline:mcp --list --user=me@example.com       # name, hint, created
 php artisan redline:mcp --revoke={id}                      # soft-revoke one token
 php artisan redline:mcp --revoke-all --user=me@example.com # revoke every token of a user
 ```
+
+`--user=` / `--name=` print a one-line pointer to the GitHub docs after the
+token reveal; `--list` and `--revoke*` never prompt and print no hint.
 
 With `--name=` matching a known agent slug the create prints that agent's
 instruction block too. The roster (`--list`, also shown in the wizard) renders
@@ -264,7 +273,8 @@ The wizard above carries every agent preset (Claude Code, OpenCode, Codex,
 PI, Cursor, VS Code and Gemini CLI).
 
 Feature config, throttling and host considerations (including "Behind HTTP
-Basic Auth"): see [MCP Server](12-mcp.md).
+Basic Auth"): see [MCP Server](12-mcp.md#behind-http-basic-auth) - the same
+section the command links to on GitHub.
 
 ## redline:update
 

@@ -48,6 +48,11 @@ class McpCommand extends Command
      */
     private const USER_CHOICE_LIMIT = 25;
 
+    /**
+     * The host-setup guide, kept in step with docs/12-mcp.md's section anchor.
+     */
+    private const MCP_DOCS_URL = 'https://github.com/zipavlin/redline-laravel/blob/main/docs/12-mcp.md#behind-http-basic-auth';
+
     public function handle(): int
     {
         if ($this->option('revoke') !== null) {
@@ -241,7 +246,11 @@ class McpCommand extends Command
 
         $this->resolveNameCollision($user, $name);
 
-        return $this->mintToken($user, $name, $preset ?? self::genericPreset());
+        $exit = $this->mintToken($user, $name, $preset ?? self::genericPreset());
+
+        $this->printBasicAuthGuide();
+
+        return $exit;
     }
 
     private function selectAgentPreset(): ?array
@@ -320,7 +329,11 @@ class McpCommand extends Command
 
         $name = trim((string) $this->option('name'));
 
-        return $this->mintToken($user, $name, self::presetFor($name));
+        $exit = $this->mintToken($user, $name, self::presetFor($name));
+
+        $this->printBasicAuthHint();
+
+        return $exit;
     }
 
     /**
@@ -368,7 +381,6 @@ class McpCommand extends Command
         // the route set is compiled, so an env change needs a fresh cache.
         $this->line('');
         $this->line('  <fg=yellow>●</> Run php artisan route:clear (or re-run route:cache / optimize) after changing REDLINE_* env values, or the endpoint will 404 from a stale cache.');
-        $this->line('  Behind HTTP Basic Auth? Bearer tokens (MCP) cannot pass the Authorization layer - exempt /'.config('redline.path', 'redline').'/api/mcp; see docs/12-mcp.md.');
     }
 
     private function printAppUrlNote(): void
@@ -378,6 +390,82 @@ class McpCommand extends Command
         }
 
         $this->line('  <fg=yellow>●</> APP_URL is not set - replace <YOUR-APP-URL> below with your app\'s URL.');
+    }
+
+    /**
+     * The wizard's host-setup branch: server-side HTTP Basic Auth swallows the
+     * Bearer header until the endpoint is exempted, so print the exact block.
+     */
+    private function printBasicAuthGuide(): void
+    {
+        $this->line('');
+
+        if ($this->choice('Is this server behind HTTP Basic Auth?', ['No', 'Yes'], 0) === 'No') {
+            $this->line('  Docs: '.self::MCP_DOCS_URL);
+
+            return;
+        }
+
+        $stack = $this->choice('Which server stack are you using?', ['apache', 'nginx'], 0);
+        $path = (string) config('redline.path', 'redline') ?: 'redline';
+        // A custom path may contain regex characters; quote them so the emitted
+        // snippet matches the literal URL segment instead of a pattern.
+        $pattern = preg_quote($path, '#');
+
+        $this->line('');
+        $this->line($stack === 'apache' ? '  Apache 2.4.8+ bypass block:' : '  nginx (untested) bypass block:');
+        $this->line('');
+
+        if ($stack === 'apache') {
+            $block = <<<'APACHE'
+# Let the Redline MCP endpoint through the site's HTTP Basic Auth.
+# Add this inside the site's <VirtualHost> block, in both the :80 and :443 vhosts.
+# (Certbot's *-le-ssl.conf is a copy made at certificate time, so edits to :80 are not carried over.)
+# It matches the original request line, so it still applies after Laravel's .htaccess
+# rewrites the request internally to index.php.
+<If "%{THE_REQUEST} =~ m#^[A-Z]+ /{path}/api/mcp(/| )#">
+    Require all granted
+</If>
+APACHE;
+        } else {
+            $block = <<<'NGINX'
+# Let the Redline MCP endpoint through the site's HTTP Basic Auth.
+# Copy your site's normal PHP location block, change only the location regex
+# and add auth_basic off; the other lines below are fallback examples.
+# Regex locations match in config order - put this next to your other regex
+# locations, for example after "location ~ \.php".
+location ~ ^/{path}/api/mcp(/|$) {
+    auth_basic off;
+
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $realpath_root/index.php;
+    fastcgi_param SCRIPT_NAME /index.php;
+    fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+}
+NGINX;
+        }
+
+        $this->printBlock(str_replace('{path}', $pattern, $block));
+
+        $this->line('');
+        $this->line("  Check: curl -i https://<site>/{$path}/api/mcp");
+        $this->line('  A JSON 401 with "WWW-Authenticate: Bearer" means the Basic Auth is bypassed and the app wants a token.');
+        $this->line($stack === 'apache'
+            ? '  A "Restricted Files" 401 page from Apache means this block is not taking effect.'
+            : '  A Basic 401 page from nginx means auth_basic is still active for that location.');
+        $this->line('  Check that the rest of the site is still protected: curl -i https://<site>/ must still answer the HTTP Basic challenge.');
+        $this->line('  Keep the bypass inside the <If> / location block - never paste AuthType None, Satisfy Any, Allow from all or auth_basic off into a <Directory> or a wider location.');
+        $this->line('');
+        $this->line('  Docs: '.self::MCP_DOCS_URL);
+    }
+
+    /**
+     * The one-line pointer for the non-interactive create paths, which never
+     * prompt.
+     */
+    private function printBasicAuthHint(): void
+    {
+        $this->line('  Behind HTTP Basic Auth? Docs: '.self::MCP_DOCS_URL);
     }
 
     /**
