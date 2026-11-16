@@ -74,7 +74,7 @@ All settings are read from `config/redline.php`, which maps to these env variabl
 | `REDLINE_COOKIE_SAME_SITE` | `lax` | `SameSite` on auth/CSRF cookies |
 | `REDLINE_COOKIE_DOMAIN` | *(none)* | Cookie domain override |
 | `REDLINE_ALLOWED_ORIGINS` | *(none)* | Escape hatch for cookie-mutation Origin checks (reverse proxies) |
-| `REDLINE_FEATURES` | *(none)* | Comma-separated features to enable (additive - all off until listed): `screenshots, videos, files, comments, mcp` |
+| `REDLINE_FEATURES` | *(none)* | Comma-separated features to enable (additive - all off until listed): `screenshots, videos, files, comments, mcp, walkthrough` |
 | `REDLINE_MAIL` | `true` | Kill switch for all Redline emails |
 | `REDLINE_VITE_URL` | *(none)* | Dev-only: serve the frontend from the Vite dev server (see "Frontend development") |
 

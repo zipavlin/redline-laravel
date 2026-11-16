@@ -15,7 +15,7 @@ Composer package `zipavlin/redline` — the Laravel backend for Redline: REST AP
 
 ## Where things are
 
-- Storage: a single `StorageProvider` (Eloquent + dedicated SQLite connection at `storage/app/redline/database/redline.db`). Requires `pdo_sqlite`. Migrations in `database/redline/` are numbered `0001_`–`0011_` (not timestamped; `0010` added `redline_tokens` + `redline_users.password_epoch`, `0011` the trailing user flag). File-DB boot verifies only the file and `redline_reports` exist — schema currency is `redline:install` / `redline:update`'s job; `ensureSchema()` never checks per-migration drift. In-memory test databases migrate automatically.
+- Storage: a single `StorageProvider` (Eloquent + dedicated SQLite connection at `storage/app/redline/database/redline.db`). Requires `pdo_sqlite`. Migrations in `database/redline/` are numbered `0001_`–`0012_` (not timestamped; `0010` added `redline_tokens` + `redline_users.password_epoch`, `0011` the trailing user flag, `0012` `walkthrough_seen`). File-DB boot verifies only the file and `redline_reports` exist — schema currency is `redline:install` / `redline:update`'s job; `ensureSchema()` never checks per-migration drift. In-memory test databases migrate automatically.
 - Query grammar: generic `filter[]/include[]/sort[]/paginate[]/aggregate[]/group_by[]` REST grammar in `src/Http/Query/`, entry point `ResourceQuery::from($model, $request)`; each model defines `querySchema()` (one example: `Report.members`, `filter[member:not]` negates the whole membership predicate; `filter[member.name:like]` is intentionally unsupported and 422s).
 - Members pivot: plain `belongsToMany` `redline_members` (`Report::members()` → `User`), composite PK `(report_id, user_id)`, real FKs with `CASCADE` — cleanup delegated to the database. `POST/DELETE /report/{report}/member` (body `{"user_ids": [...]}`) are `Operation::UPDATE`-gated (developer/admin/author; DELETE also an eligible non-guest member removing exactly themselves); both respond `{ "members": [...] }` through the shared `Support\Members::forReport()` projection so all surfaces stay consistent.
 - Mail views `resources/views/mail/`: `new-report`, `password-reset`, `user-invitation`, `verify`, `registration-approved`. `REDLINE_MAIL` kill switch; sends are best-effort and never fail a request.
@@ -122,7 +122,7 @@ config and no custom-provider seam.
 
 | Provider | Backing | Notes |
 |---|---|---|
-| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0011_`. **Not** auto-migrated at runtime: for a file database boot only verifies the file exists and `redline_reports` is present (a `RuntimeException` pointing at `php artisan redline:install` otherwise). It does **not** check per-migration drift - keeping an installed schema current is `redline:update`'s job, wired as a composer `post-package-update` listener (`Zipavlin\Redline\ComposerHook`, `REDLINE_SKIP_UPDATE_HOOK` opts out). In-memory test databases migrate automatically. |
+| `StorageProvider` | Eloquent + own SQLite connection at `storage/app/redline/database/redline.db` | Requires `pdo_sqlite`. Numbered migrations `database/redline/0001_…0012_`. **Not** auto-migrated at runtime: for a file database boot only verifies the file exists and `redline_reports` is present (a `RuntimeException` pointing at `php artisan redline:install` otherwise). It does **not** check per-migration drift - keeping an installed schema current is `redline:update`'s job, wired as a composer `post-package-update` listener (`Zipavlin\Redline\ComposerHook`, `REDLINE_SKIP_UPDATE_HOOK` opts out). In-memory test databases migrate automatically. |
 
 ### Query grammar - `src/Http/Query/`
 
@@ -216,7 +216,7 @@ supported (no `relatedSchema` on that filter) and 422s, as intended.
 
 ### Features & mail
 
-- `REDLINE_FEATURES` - comma-separated list (`screenshots, videos, files, comments, mcp`);
+- `REDLINE_FEATURES` - comma-separated list (`screenshots, videos, files, comments, mcp, walkthrough`);
   additive opt-in, a feature is off unless listed; an unknown value is a config error thrown
   at boot. `mcp` gates the REDLI-51 MCP server: when enabled, `Mcp::web()` mounts
   `{redline.path}/api/mcp` (server shell `src/Mcp/RedlineServer.php`, eight tools:
@@ -335,7 +335,7 @@ type hint) because `composer/composer` is not installed here; it runs
 - PHP: PSR-4 `Zipavlin\Redline\` → `src/`; tests `Zipavlin\Redline\Tests\` → `tests/`.
 - Linting: Pint (Laravel defaults; no custom `pint.json`).
 - EditorConfig: LF line endings, 4-space indent, UTF-8.
-- Migrations numbered (`0001_`-`0011_`) in `database/redline/`, not timestamped; created
+- Migrations numbered (`0001_`-`0012_`) in `database/redline/`, not timestamped; created
   by `redline:install` for file databases, auto-run for in-memory test DBs. `ensureSchema()`
   never checks for per-migration drift - never add a per-migration guard there.
 - Built IIFE bundles in `public/` **are committed**.

@@ -46,8 +46,8 @@ For developers and admins, a built-in **dashboard** covering reports, users, and
 analytics, where reports flow through the lifecycle `new → noticed → progress →
 resolved → done`.
 
-Features are individually switchable. Five flags - `screenshots`, `videos`, `files`,
-`comments`, and `mcp` - are all **off** until listed in the `REDLINE_FEATURES` environment
+Features are individually switchable. Six flags - `screenshots`, `videos`, `files`,
+`comments`, `mcp`, and `walkthrough` - are all **off** until listed in the `REDLINE_FEATURES` environment
 variable (comma-separated, additive). Enable/toggle with `php artisan redline:enable`.
 The frontend learns which features are enabled from the public bootstrap endpoint at
 mount time, not from element attributes.

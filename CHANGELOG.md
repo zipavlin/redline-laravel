@@ -11,12 +11,19 @@
   was filed from. Running it again after the move reports that nothing is
   stored at the old location, and swapping the two arguments moves the reports
   back.
-
 - **Per-user opt-out of new-report emails** - developers and admins no longer
   have to receive an email for every report filed. Each user can switch the
   new-report notification off for themselves (default stays on, so existing
   inboxes are unchanged). Opted-out users are simply skipped when a report
   arrives; password-reset and other emails are not affected.
+- **Guided walkthrough for the widget** - turn on the new `walkthrough` feature
+  with `php artisan redline:enable walkthrough` and the widget offers a short
+  guided tour to signed-in users the first time it loads, showing them where to
+  pin a comment, filter reports and find the account menu, then walking them
+  through describing and sending their first report. Redline remembers the
+  answer for each user, so nobody is asked twice, and guests are never
+  prompted. Existing installs need `php artisan redline:update` once to add the
+  per-user flag.
 
 ## Changed
 

@@ -43,6 +43,6 @@ it('fails fast at register when redline.features contains an unknown value', fun
 
     expect(fn () => $provider->register())->toThrow(
         InvalidArgumentException::class,
-        'Unknown Redline feature(s): tupo. Valid features: screenshots, videos, files, comments, mcp.',
+        'Unknown Redline feature(s): tupo. Valid features: screenshots, videos, files, comments, mcp, walkthrough.',
     );
 });

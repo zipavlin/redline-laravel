@@ -29,7 +29,7 @@ it('rejects an unknown configured value naming it and the valid ones', function 
 
     expect(fn () => Feature::enabled())->toThrow(
         InvalidArgumentException::class,
-        'Unknown Redline feature(s): videoss. Valid features: screenshots, videos, files, comments, mcp.',
+        'Unknown Redline feature(s): videoss. Valid features: screenshots, videos, files, comments, mcp, walkthrough.',
     );
 });
 
@@ -38,6 +38,6 @@ it('rejects mentions, which is not a feature case', function () {
 
     expect(fn () => Feature::enabled())->toThrow(
         InvalidArgumentException::class,
-        'Unknown Redline feature(s): mentions. Valid features: screenshots, videos, files, comments, mcp.',
+        'Unknown Redline feature(s): mentions. Valid features: screenshots, videos, files, comments, mcp, walkthrough.',
     );
 });

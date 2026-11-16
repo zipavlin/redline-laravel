@@ -30,7 +30,7 @@ it('advertises every enabled feature in enum order', function () {
     // The test harness wires all Feature cases on before boot.
     $this->getJson('/redline/api/bootstrap')
         ->assertStatus(200)
-        ->assertJsonPath('features', ['screenshots', 'videos', 'files', 'comments', 'mcp']);
+        ->assertJsonPath('features', ['screenshots', 'videos', 'files', 'comments', 'mcp', 'walkthrough']);
 });
 
 it('advertises only the enabled features', function () {

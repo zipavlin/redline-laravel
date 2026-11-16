@@ -34,7 +34,7 @@ Every key in `config/redline.php` and the env var that backs it:
 | `REDLINE_AUTH_GUEST_ORIGINS` | *(none)* | Comma-separated widget origins allowed to submit guest reports. When set, an anonymous `POST /redline/api/report` must present a matching `Origin` (or `Referer`) header or the request's own scheme+host. |
 | `REDLINE_AUTH_GUEST_THROTTLE` | `20` | Per-minute per-IP rate limit for guest report submissions (backs the `redline-guest` limiter). |
 | `REDLINE_ALLOWED_ORIGINS` | *(none)* | Escape hatch for cookie-mutation `Origin` checks behind reverse proxies: comma-separated extra origins accepted when the request's scheme+host differs from the browser-visible origin. |
-| `REDLINE_FEATURES` | *(none)* | Comma-separated features to enable. Every feature is **off** until it is listed. Accepted values are exactly `screenshots, videos, files, comments, mcp` - see [Feature flags](#feature-flags). |
+| `REDLINE_FEATURES` | *(none)* | Comma-separated features to enable. Every feature is **off** until it is listed. Accepted values are exactly `screenshots, videos, files, comments, mcp, walkthrough` - see [Feature flags](#feature-flags). |
 
 Two auth-cookie keys have no env backing and can only be changed by editing the published config: `auth.cookie.name` (default `redline_token`) and the CSRF pair `auth.csrf_cookie` / `auth.csrf_header` (defaults `redline_csrf` / `X-Redline-CSRF`).
 
@@ -98,13 +98,14 @@ Two more serve the MCP endpoint, in pinned order, per [MCP Server](12-mcp.md):
 
 `REDLINE_FEATURES` is a comma-separated, additive list: a feature is **off** unless its value appears. A fresh install therefore enables nothing until `redline:install`, `redline:enable` or a hand edit of `.env` lists some.
 
-Accepted values - exactly these five:
+Accepted values - exactly these six:
 
 - `screenshots`
 - `videos`
 - `files`
 - `comments`
 - `mcp` (an MCP server at `/{REDLINE_PATH}/api/mcp` - see [MCP Server](12-mcp.md))
+- `walkthrough` (the widget may run a first-run product walkthrough for authenticated users)
 
 An unknown value is a config error (`Unknown Redline feature(s): …`) thrown at boot and wherever the list is read - it is never silently dropped.
 
@@ -115,6 +116,12 @@ REDLINE_FEATURES=screenshots,comments
 ```
 
 Toggle with `php artisan redline:enable` (list current state) and enable/disable by name.
+
+`walkthrough` is the one feature that stores a per-user preference: the first
+time the widget offers the tour to a signed-in user, Redline records the answer
+so the prompt does not return (the account menu can replay it). Guests are
+never prompted. Installs upgraded from a version without the preference need
+`php artisan redline:update` once so the new user flag exists.
 
 ## Changing the URL prefix
 

@@ -173,19 +173,20 @@ class AuthController extends Controller
      * PATCH /redline/api/auth/me (protected)
      *
      * Self-service preference update. Deliberately whitelist-only: the body may
-     * carry nothing but `notify_new_reports`, so this endpoint can never become
-     * a self-service path to name/email/role changes (those stay admin-only via
-     * PATCH /user/{user}).
+     * carry nothing but `notify_new_reports` and `walkthrough_seen`, so this
+     * endpoint can never become a self-service path to name/email/role changes
+     * (those stay admin-only via PATCH /user/{user}).
      */
     public function updateMe(Request $request): JsonResponse
     {
-        $unknown = array_diff(array_keys($request->all()), ['notify_new_reports']);
+        $unknown = array_diff(array_keys($request->all()), ['notify_new_reports', 'walkthrough_seen']);
         if ($unknown !== []) {
-            return $this->error(['Only notify_new_reports may be updated here.'], 422);
+            return $this->error(['Only notify_new_reports and walkthrough_seen may be updated here.'], 422);
         }
 
         $data = $request->validate([
-            'notify_new_reports' => ['required', 'boolean'],
+            'notify_new_reports' => ['required_without:walkthrough_seen', 'boolean'],
+            'walkthrough_seen' => ['required_without:notify_new_reports', 'boolean'],
         ]);
 
         $user = $request->user();

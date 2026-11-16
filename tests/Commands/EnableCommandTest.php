@@ -68,6 +68,7 @@ it('lists every feature with its state when called without arguments', function 
         ->expectsOutputToContain('files       disabled')
         ->expectsOutputToContain('comments    enabled')
         ->expectsOutputToContain('mcp         disabled')
+        ->expectsOutputToContain('walkthrough disabled')
         ->expectsOutputToContain('REDLINE_FEATURES')
         ->assertExitCode(0);
 });
@@ -139,7 +140,7 @@ it('fails with a clear error and writes nothing for an unknown feature name', fu
     $before = file_get_contents($this->envPath);
 
     $this->artisan('redline:enable', ['feature' => ['vidoes']])
-        ->expectsOutputToContain('Unknown Redline feature(s): vidoes. Valid features: screenshots, videos, files, comments, mcp.')
+        ->expectsOutputToContain('Unknown Redline feature(s): vidoes. Valid features: screenshots, videos, files, comments, mcp, walkthrough.')
         ->assertExitCode(1);
 
     expect(file_get_contents($this->envPath))->toBe($before);

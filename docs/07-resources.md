@@ -475,7 +475,7 @@ Response (`200`):
 ```json
 {
   "version": 2,
-  "features": ["screenshots", "videos", "files", "comments", "mcp"],
+  "features": ["screenshots", "videos", "files", "comments", "mcp", "walkthrough"],
   "capabilities": {
     "guest_reporting": false,
     "auth": {

@@ -11,6 +11,7 @@ enum Feature: string
     case FILES = 'files';
     case COMMENTS = 'comments';
     case MCP = 'mcp';
+    case WALKTHROUGH = 'walkthrough';
 
     /**
      * Features explicitly enabled through config('redline.features'). The

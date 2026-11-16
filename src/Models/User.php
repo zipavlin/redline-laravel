@@ -34,6 +34,7 @@ class User extends Model
         'password',
         'status',
         'notify_new_reports',
+        'walkthrough_seen',
     ];
 
     protected $hidden = [
@@ -45,6 +46,19 @@ class User extends Model
     protected $casts = [
         'role' => Role::class,
         'notify_new_reports' => 'boolean',
+        'walkthrough_seen' => 'boolean',
+    ];
+
+    /**
+     * A freshly inserted model has no column defaults loaded from the database,
+     * so seed the user-level flags here - every user payload must carry them.
+     * Both mirror the migration defaults (0011 `true`, 0012 `false`).
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'notify_new_reports' => true,
+        'walkthrough_seen' => false,
     ];
 
     protected $appends = [

@@ -144,7 +144,8 @@ return [
     // Features
     // -------------------------------------------------------------------------
     // Additive opt-in: every feature is OFF until it is listed. Comma-separated,
-    // lower-case. Valid values: screenshots, videos, files, comments, mcp. An unknown
+    // lower-case. Valid values: screenshots, videos, files, comments, mcp,
+    // walkthrough. An unknown
     // value is a config error (thrown at boot and whenever the list is read) -
     // it is never silently dropped.
     // Example: REDLINE_FEATURES=screenshots,comments

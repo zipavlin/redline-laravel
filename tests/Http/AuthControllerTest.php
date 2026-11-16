@@ -398,7 +398,7 @@ it('never includes the password in any response', function () {
 });
 
 // ---------------------------------------------------------------------------
-// PATCH /auth/me - self-service notification preference
+// PATCH /auth/me - self-service preferences
 // ---------------------------------------------------------------------------
 
 it('lets a user update their own notification preference via PATCH /auth/me', function () {
@@ -420,21 +420,83 @@ it('lets a user update their own notification preference via PATCH /auth/me', fu
     expect($body['user']['notify_new_reports'])->toBeTrue();
 });
 
+it('lets a user mark the walkthrough seen via PATCH /auth/me with that key alone', function () {
+    $user = makeUser('developer');
+    $headers = ['Authorization' => 'Bearer '.makeAuthToken($user)];
+
+    $body = $this->patchJson('/redline/api/auth/me', ['walkthrough_seen' => true], $headers)
+        ->assertStatus(200)
+        ->json();
+
+    expect($body['user']['walkthrough_seen'])->toBeTrue()
+        ->and(app(User::class)->find($user['id'])->walkthrough_seen)->toBeTrue();
+
+    // Setting it back is allowed too (the widget may reset the flag).
+    $this->patchJson('/redline/api/auth/me', ['walkthrough_seen' => false], $headers)
+        ->assertStatus(200)
+        ->assertJsonPath('user.walkthrough_seen', false);
+});
+
+it('accepts both self-service preference keys in one PATCH /auth/me', function () {
+    $user = makeUser('developer');
+    $headers = ['Authorization' => 'Bearer '.makeAuthToken($user)];
+
+    $body = $this->patchJson('/redline/api/auth/me', [
+        'notify_new_reports' => false,
+        'walkthrough_seen' => true,
+    ], $headers)->assertStatus(200)->json();
+
+    expect($body['user']['notify_new_reports'])->toBeFalse()
+        ->and($body['user']['walkthrough_seen'])->toBeTrue();
+});
+
 it('rejects PATCH /auth/me with unknown or missing keys (whitelist-only body)', function () {
     $user = makeUser('developer');
     $headers = ['Authorization' => 'Bearer '.makeAuthToken($user)];
 
     // A privilege-escalation attempt must never pass.
-    $this->patchJson('/redline/api/auth/me', ['role' => 'admin'], $headers)->assertStatus(422);
+    $this->patchJson('/redline/api/auth/me', ['role' => 'admin'], $headers)
+        ->assertStatus(422)
+        ->assertJson(['errors' => ['Only notify_new_reports and walkthrough_seen may be updated here.']]);
     $this->patchJson('/redline/api/auth/me', ['notify_new_reports' => false, 'name' => 'Hacked'], $headers)->assertStatus(422);
     $this->patchJson('/redline/api/auth/me', [], $headers)->assertStatus(422);
     $this->patchJson('/redline/api/auth/me', ['notify_new_reports' => 'yes'], $headers)->assertStatus(422);
+    $this->patchJson('/redline/api/auth/me', ['walkthrough_seen' => 'yes'], $headers)->assertStatus(422);
 
     // Nothing was changed.
     $fresh = app(User::class)->find($user['id']);
     expect($fresh->role->value)->toBe('developer')
         ->and($fresh->name)->toBe($user['name'])
-        ->and($fresh->notify_new_reports)->toBeTrue();
+        ->and($fresh->notify_new_reports)->toBeTrue()
+        ->and($fresh->walkthrough_seen)->toBeFalse();
+});
+
+it('defaults the user flags and exposes them on every user payload', function () {
+    $register = $this->postJson('/redline/api/auth/register', [
+        'name' => 'Walker', 'email' => 'walker@example.com', 'password' => 'secret123', 'role' => 'reporter',
+    ])->assertStatus(200)->json();
+
+    // Both user-level booleans must ride the register payload, not only /auth/me.
+    expect($register['user']['walkthrough_seen'])->toBeFalse()
+        ->and($register['user']['notify_new_reports'])->toBeTrue();
+
+    $user = app(User::class)->whereEmail('walker@example.com')->first();
+    expect($user->walkthrough_seen)->toBeFalse()
+        ->and($user->notify_new_reports)->toBeTrue();
+
+    $login = $this->postJson('/redline/api/auth/login', [
+        'email' => 'walker@example.com', 'password' => 'secret123',
+    ])->assertStatus(200)->json();
+
+    expect($login['user']['walkthrough_seen'])->toBeFalse()
+        ->and($login['user']['notify_new_reports'])->toBeTrue();
+
+    $me = $this->getJson('/redline/api/auth/me', ['Authorization' => 'Bearer '.makeAuthToken($user->toArray())])
+        ->assertStatus(200)
+        ->json();
+
+    expect($me['user']['walkthrough_seen'])->toBeFalse()
+        ->and($me['user']['notify_new_reports'])->toBeTrue();
 });
 
 it('denies PATCH /auth/me without a token with 403 and the error marker', function () {

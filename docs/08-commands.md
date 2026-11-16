@@ -76,7 +76,7 @@ Nothing is enabled by default. Select any you want to turn on.
 Which features should you enable? (all off by default - separate multiple with commas, or press Enter for none)
 ```
 
-The choices are exactly `screenshots`, `videos`, `files`, `comments`, `mcp`. An empty answer enables
+The choices are exactly `screenshots`, `videos`, `files`, `comments`, `mcp`, `walkthrough`. An empty answer enables
 nothing. `REDLINE_FEATURES` is always written (even as an empty value) as a comma-separated
 list of the selected features.
 
@@ -203,6 +203,7 @@ The listing reads:
   files      disabled
   comments   disabled
   mcp        disabled
+  walkthrough disabled
 
   Toggle with `php artisan redline:enable <names>` or `--disable=<names>`.
 ```
@@ -213,7 +214,7 @@ set - the key is kept so the all-off state is explicit). An unknown feature name
 (exit 1) and writes nothing:
 
 ```
-  Unknown Redline feature(s): vidoes. Valid features: screenshots, videos, files, comments, mcp.
+  Unknown Redline feature(s): vidoes. Valid features: screenshots, videos, files, comments, mcp, walkthrough.
 ```
 
 ## redline:mcp

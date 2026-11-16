@@ -65,7 +65,7 @@ For scripts and CI, `php artisan redline:install --silent` runs the install with
 
    Writes `REDLINE_GUARD_PROVIDER`, plus `REDLINE_GUARD_ALLOWED_IPS` for the IP guard.
 
-4. **Features** - *"Nothing is enabled by default. Select any you want to turn on."* Multi-select from `screenshots`, `videos`, `files`, `comments`, `mcp`; pressing Enter without a selection enables none. Writes `REDLINE_FEATURES` (always, even empty).
+4. **Features** - *"Nothing is enabled by default. Select any you want to turn on."* Multi-select from `screenshots`, `videos`, `files`, `comments`, `mcp`, `walkthrough`; pressing Enter without a selection enables none. Writes `REDLINE_FEATURES` (always, even empty).
 
 5. **Email setup** - skipped entirely when a real mailer is already configured (default mailer is not `log`/`array`/`null` and `REDLINE_MAIL` is not `false`). Otherwise it warns - if the chosen auth provider verifies users by email (the **Domain** provider does), registration verification and password reset stay dead until a mailer exists; otherwise emails (password reset, new-report notifications) are simply skipped. Then it offers:
 
